@@ -318,22 +318,37 @@ def print_metrics(label: str, metrics: Dict[str, float]):
 
 # ----------------------------- Plotting ---------------------------------- #
 
-def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True, demo_mode: bool = False):  # pragma: no cover
+def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True, demo_mode: bool = False, zoom: Dict[str, Tuple[float, float] | None] | None = None):  # pragma: no cover
     if not _HAVE_PLOT:
         print("matplotlib not available; skipping plots.")
         return
     import matplotlib.pyplot as plt
     
+    def _pick_lim(default_lim: Tuple[float, float], key: str) -> Tuple[float, float]:
+        """Return zoom override if provided; otherwise default_lim.
+        Ensures non-degenerate span if min==max.
+        """
+        val = None
+        if zoom is not None:
+            val = zoom.get(key)
+        if val is not None:
+            a, b = val
+            if a == b:
+                eps = 1e-12 if a == 0 else abs(a) * 1e-12
+                return (a - eps, b + eps)
+            return (a, b)
+        return default_lim
+    
     if demo_mode and len(results) > 1:
-        # Demo mode: Create separate subplot for each method (4 methods x 4 plot types)
+        # Demo mode: Create separate subplot for each method (2 columns: q(t) and ΔH)
         n_methods = len(results)
-        fig, axs = plt.subplots(n_methods, 4, figsize=(16, 3*n_methods))
+        fig, axs = plt.subplots(n_methods, 2, figsize=(12, 3*n_methods))
         
         # First pass: compute global limits for consistent scaling
         all_t = []
         all_q = []
         all_p = []
-        all_dE = []
+        all_dE = []  # kept for potential future global stats; not used for per-method scaling
         for label, res in results.items():
             E0 = res.energy[0]
             dE = res.energy - E0
@@ -342,18 +357,17 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
             all_p.append(res.p)
             all_dE.append(dE)
         
-        t_min, t_max = np.min([t.min() for t in all_t]), np.max([t.max() for t in all_t])
-        q_min, q_max = np.min([q.min() for q in all_q]), np.max([q.max() for q in all_q])
-        p_min, p_max = np.min([p.min() for p in all_p]), np.max([p.max() for p in all_p])
-        dE_min, dE_max = np.min([dE.min() for dE in all_dE]), np.max([dE.max() for dE in all_dE])
+        # Global time span and symmetric limits that encompass all data
+        t_min = np.min([t.min() for t in all_t])
+        t_max = np.max([t.max() for t in all_t])
+        q_abs = np.max([np.max(np.abs(q)) for q in all_q])
+        p_abs = np.max([np.max(np.abs(p)) for p in all_p])
         
-        # Add 5% padding to limits
-        q_range = q_max - q_min
-        p_range = p_max - p_min
-        dE_range = dE_max - dE_min
-        q_lim = [q_min - 0.05*q_range, q_max + 0.05*q_range]
-        p_lim = [p_min - 0.05*p_range, p_max + 0.05*p_range]
-        dE_lim = [dE_min - 0.05*dE_range, dE_max + 0.05*dE_range]
+        pad = 0.05  # 5% padding
+        q_lim = _pick_lim((-q_abs * (1 + pad), q_abs * (1 + pad)), 'qylim')
+        p_lim = _pick_lim((-p_abs * (1 + pad), p_abs * (1 + pad)), 'pylim')
+        t_lim = _pick_lim((t_min, t_max), 'tlim')
+        # Energy error limits are set per-method below
         
         # Second pass: plot with consistent limits
         for idx, (label, res) in enumerate(results.items()):
@@ -365,88 +379,84 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
             axs[idx, 0].set_ylabel('Position (q)')
             axs[idx, 0].set_title(f'{label}: Position vs Time')
             axs[idx, 0].grid(True, alpha=0.3)
-            axs[idx, 0].set_xlim([t_min, t_max])
+            axs[idx, 0].set_xlim(t_lim)
             axs[idx, 0].set_ylim(q_lim)
             if idx == n_methods - 1:
                 axs[idx, 0].set_xlabel('Time (t)')
             
-            # Momentum vs time
-            axs[idx, 1].plot(res.t, res.p, color='C1')
-            axs[idx, 1].set_ylabel('Momentum (p)')
-            axs[idx, 1].set_title(f'{label}: Momentum vs Time')
+            # Energy error vs time
+            axs[idx, 1].plot(res.t, dE, color='C3')
+            axs[idx, 1].set_ylabel('Energy Error (ΔH)')
+            axs[idx, 1].set_title(f'{label}: Energy Error vs Time')
             axs[idx, 1].grid(True, alpha=0.3)
-            axs[idx, 1].set_xlim([t_min, t_max])
-            axs[idx, 1].set_ylim(p_lim)
+            axs[idx, 1].axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
+            axs[idx, 1].set_xlim(t_lim)
+            # Per-method symmetric y-limits for energy error (overridden by --delim if provided)
+            if zoom and zoom.get('delim') is not None:
+                axs[idx, 1].set_ylim(_pick_lim((-1.0, 1.0), 'delim'))
+            else:
+                dE_abs_local = float(np.max(np.abs(dE)))
+                if dE_abs_local == 0.0:
+                    dE_abs_local = 1e-16
+                dE_lim_local = (-dE_abs_local * (1 + pad), dE_abs_local * (1 + pad))
+                axs[idx, 1].set_ylim(dE_lim_local)
+            axs[idx, 1].ticklabel_format(axis='y', style='scientific', scilimits=(-3, 3))
             if idx == n_methods - 1:
                 axs[idx, 1].set_xlabel('Time (t)')
-            
-            # Phase space
-            axs[idx, 2].plot(res.q, res.p, color='C2')
-            axs[idx, 2].set_ylabel('Momentum (p)')
-            axs[idx, 2].set_title(f'{label}: Phase Space')
-            axs[idx, 2].grid(True, alpha=0.3)
-            axs[idx, 2].set_xlim(q_lim)
-            axs[idx, 2].set_ylim(p_lim)
-            axs[idx, 2].set_aspect('equal', adjustable='box')
-            if idx == n_methods - 1:
-                axs[idx, 2].set_xlabel('Position (q)')
-            
-            # Energy error vs time
-            axs[idx, 3].plot(res.t, dE, color='C3')
-            axs[idx, 3].set_ylabel('Energy Error (ΔH)')
-            axs[idx, 3].set_title(f'{label}: Energy Error vs Time')
-            axs[idx, 3].grid(True, alpha=0.3)
-            axs[idx, 3].axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
-            axs[idx, 3].set_xlim([t_min, t_max])
-            axs[idx, 3].set_ylim(dE_lim)
-            axs[idx, 3].ticklabel_format(axis='y', style='scientific', scilimits=(-3, 3))
-            if idx == n_methods - 1:
-                axs[idx, 3].set_xlabel('Time (t)')
         
+        # Link time axes (share x across q and ΔH)
+        time_axes = []
+        for i in range(n_methods):
+            time_axes.extend([axs[i, 0], axs[i, 1]])
+        if time_axes:
+            base = time_axes[0]
+            for ax in time_axes[1:]:
+                ax.sharex(base)
+
+        # Store default limits and bind reset hotkey 'r'
+        defaults = {ax: (ax.get_xlim(), ax.get_ylim()) for ax in fig.axes}
+
+        def on_key(event):
+            if event.key == 'r':
+                for ax, (xl, yl) in defaults.items():
+                    ax.set_xlim(xl)
+                    ax.set_ylim(yl)
+                fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect('key_press_event', on_key)
+
         fig.tight_layout()
         plt.show()
     else:
-        # Single method mode: 2x2 layout
-        fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+        # Single method mode: 1x2 layout (q vs time, energy error vs time)
+        fig, axs = plt.subplots(1, 2, figsize=(12, 4))
         
-        ax_q = axs[0, 0]  # Position q vs time
-        ax_p = axs[0, 1]  # Momentum p vs time
-        ax_phase = axs[1, 0]  # Phase space (q vs p)
-        ax_error = axs[1, 1]  # Energy error vs time
+        ax_q = axs[0]  # Position q vs time
+        ax_error = axs[1]  # Energy error vs time
         
         # Plot position vs time
         for label, res in results.items():
             ax_q.plot(res.t, res.q, label=label, alpha=0.8)
+        # Time and y-limits
+        t_all = np.concatenate([res.t for res in results.values()])
+        t_lim = _pick_lim((t_all.min(), t_all.max()), 'tlim')
+        ax_q.set_xlim(t_lim)
+        if zoom and zoom.get('qylim') is not None:
+            ax_q.set_ylim(_pick_lim((0.0, 1.0), 'qylim'))
         ax_q.set_xlabel('Time (t)')
         ax_q.set_ylabel('Position (q)')
         ax_q.set_title('Position vs Time')
         ax_q.legend()
         ax_q.grid(True, alpha=0.3)
         
-        # Plot momentum vs time
-        for label, res in results.items():
-            ax_p.plot(res.t, res.p, label=label, alpha=0.8)
-        ax_p.set_xlabel('Time (t)')
-        ax_p.set_ylabel('Momentum (p)')
-        ax_p.set_title('Momentum vs Time')
-        ax_p.legend()
-        ax_p.grid(True, alpha=0.3)
-        
-        # Plot phase space (q vs p)
-        for label, res in results.items():
-            ax_phase.plot(res.q, res.p, label=label, alpha=0.7)
-        ax_phase.set_xlabel('Position (q)')
-        ax_phase.set_ylabel('Momentum (p)')
-        ax_phase.set_title('Phase Space (q vs p)')
-        ax_phase.legend()
-        ax_phase.grid(True, alpha=0.3)
-        ax_phase.axis('equal')  # Equal aspect ratio to show circular orbit
-        
         # Plot energy error vs time
         for label, res in results.items():
             E0 = res.energy[0]
             dE = res.energy - E0
             ax_error.plot(res.t, dE, label=label, alpha=0.8)
+        ax_error.set_xlim(t_lim)
+        if zoom and zoom.get('delim') is not None:
+            ax_error.set_ylim(_pick_lim((0.0, 1.0), 'delim'))
         ax_error.set_xlabel('Time (t)')
         ax_error.set_ylabel('Energy Error (ΔH)')
         ax_error.set_title('Energy Error vs Time')
@@ -457,6 +467,21 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
         # Use scientific notation for small error values
         ax_error.ticklabel_format(axis='y', style='scientific', scilimits=(-3, 3))
         
+        # Link time axes (share x across q and ΔH)
+        ax_error.sharex(ax_q)
+
+        # Store default limits and bind reset hotkey 'r'
+        defaults = {ax: (ax.get_xlim(), ax.get_ylim()) for ax in fig.axes}
+
+        def on_key(event):
+            if event.key == 'r':
+                for ax, (xl, yl) in defaults.items():
+                    ax.set_xlim(xl)
+                    ax.set_ylim(yl)
+                fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect('key_press_event', on_key)
+
         fig.tight_layout()
         plt.show()
 
@@ -464,7 +489,7 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Yoshida high-order symplectic integrators for harmonic oscillator")
-    ap.add_argument('--method', choices=['y4','y6','y8','rk4'], help='Integration method')
+    ap.add_argument('--method', nargs='+', choices=['y4','y6','y8','rk4'], help='Integration method(s) - can specify multiple')
     ap.add_argument('--dt', type=float, default=0.01, help='Time step size')
     ap.add_argument('--steps', type=int, default=1000, help='Number of steps')
     ap.add_argument('--q0', type=float, default=1.0, help='Initial position q(0)')
@@ -473,6 +498,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     ap.add_argument('--energy', action='store_true', help='Show energy statistics')
     ap.add_argument('--demo', action='store_true', help='Run demo comparing all methods')
     ap.add_argument('--show-coefficients', action='store_true', help='Print computed Yoshida coefficients and verify order conditions')
+    # Zoom/limit options: pass as "min,max" (comma or colon separated)
+    ap.add_argument('--tlim', type=str, help='Time axis limits: min,max')
+    ap.add_argument('--qylim', type=str, help='q(t) y-limits: min,max')
+    ap.add_argument('--pylim', type=str, help='p(t) y-limits: min,max')
+    ap.add_argument('--delim', type=str, help='Energy error y-limits: min,max')
     return ap.parse_args(argv)
 
 # ------------------------------ Main logic -------------------------------- #
@@ -501,6 +531,27 @@ def demo(dt: float, steps: int, q0: float, p0: float) -> Dict[str, IntegrationRe
 
 def main(argv: List[str] | None = None):
     ns = parse_args(argv or sys.argv[1:])
+
+    def _parse_lim(s: str | None) -> Tuple[float, float] | None:
+        if not s:
+            return None
+        # Accept separators comma or colon
+        if ':' in s:
+            parts = s.split(':', 1)
+        else:
+            parts = s.split(',', 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid limit format '{s}'. Use 'min,max'.")
+        a = float(parts[0].strip())
+        b = float(parts[1].strip())
+        return (a, b)
+
+    zoom = {
+        'tlim': _parse_lim(ns.tlim),
+        'qylim': _parse_lim(ns.qylim),
+        'pylim': _parse_lim(ns.pylim),
+        'delim': _parse_lim(ns.delim),
+    }
     
     if ns.show_coefficients:
         for order in [4, 6, 8]:
@@ -523,7 +574,7 @@ def main(argv: List[str] | None = None):
             for label, res in results.items():
                 print_metrics(label, energy_metrics(res))
         if ns.plot:
-            plot_results(results, show_energy=True, demo_mode=True)
+            plot_results(results, show_energy=True, demo_mode=True, zoom=zoom)
         else:
             # Print concise summary even without --energy for demo
             for label, res in results.items():
@@ -534,11 +585,22 @@ def main(argv: List[str] | None = None):
         print("No --method specified. Use --demo for a full comparison.")
         return
 
-    label, res = run_single(ns.method, ns.q0, ns.p0, ns.dt, ns.steps)
+    # Run specified method(s)
+    results = {}
+    for method in ns.method:
+        label, res = run_single(method, ns.q0, ns.p0, ns.dt, ns.steps)
+        results[label] = res
+    
+    # Print energy metrics if requested
     if ns.energy:
-        print_metrics(label, energy_metrics(res))
+        for label, res in results.items():
+            print_metrics(label, energy_metrics(res))
+    
+    # Plot results
     if ns.plot:
-        plot_results({label: res}, show_energy=True)
+        # Use demo_mode if multiple methods specified
+        use_demo_mode = len(results) > 1
+        plot_results(results, show_energy=True, demo_mode=use_demo_mode, zoom=zoom)
 
 if __name__ == '__main__':  # pragma: no cover
     main()

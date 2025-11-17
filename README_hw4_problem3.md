@@ -70,16 +70,28 @@ python hw4_problem3.py --demo --dt 0.01 --steps 5000 --plot --energy
 
 # RK4 comparison
 python hw4_problem3.py --method rk4 --dt 0.01 --steps 2000 --energy
+
+# With custom axis limits (optional)
+python hw4_problem3.py --demo --dt 0.1 --steps 10000 --plot --tlim 0,100 --delim -1e-6,1e-6
 ```
-Flags:
+
+### Core Flags
 - `--method {y4,y6,y8,rk4}`: choose integrator (omit when using `--demo`).
 - `--dt`: time step.
 - `--steps`: number of integration steps.
-- `--q0`, `--p0`: initial conditions.
+- `--q0`, `--p0`: initial conditions (default: q0=1.0, p0=0.0).
 - `--energy`: print energy statistics.
-- `--plot`: generate phase space, q(t), energy and energy deviation plots.
-- `--demo`: run all Yoshida orders plus RK4 and summarize.
+- `--plot`: generate plots (position vs time and energy error vs time).
+- `--demo`: run all Yoshida orders plus RK4 and compare.
 - `--show-coefficients`: display computed coefficients and order condition residuals.
+
+### Zoom/Limit Options (Optional)
+Fine-tune plot axes (format: `min,max` or `min:max`):
+- `--tlim`: time axis limits
+- `--qylim`: position y-axis limits
+- `--delim`: energy error y-axis limits (overrides per-method auto-scaling in demo mode)
+
+Note: Phase space and momentum plots have been removed; only position and energy error are shown.
 
 ## Output Metrics
 For each run the script can report:
@@ -88,20 +100,57 @@ For each run the script can report:
 - `max|dE|`: maximum absolute deviation from initial energy.
 - `rms(dE)`: root mean square energy deviation.
 
+## Plotting Features
+The script generates interactive plots using Matplotlib:
+
+### Plot Layout
+- **Demo mode**: N×2 grid (one row per method)
+  - Column 1: Position q(t) vs time
+  - Column 2: Energy error ΔH(t) vs time
+- **Single-method mode**: 1×2 layout
+  - Left: Position q(t) vs time
+  - Right: Energy error ΔH(t) vs time
+
+### Interactive Controls
+- **Zoom/Pan**: Use the Matplotlib toolbar (magnifying glass for zoom, hand for pan)
+- **Linked axes**: Time axes are shared across position and error plots; zooming one updates both
+- **Reset hotkey**: Press `r` to reset all axes to initial limits
+- **Per-method scaling**: In demo mode, each method's energy error plot auto-scales to its own error envelope (unless overridden with `--delim`)
+
 ## Observations (Guidance for Report)
-1. **Energy Conservation**: Symplectic Yoshida methods show bounded, quasi-periodic energy error that does not drift secularly; RK4 exhibits a slow drift over long times (depending on `dt`).
-2. **Order vs. Stability**: Higher-order Yoshida methods (6, 8) allow larger step sizes for a target accuracy but require more force evaluations per step (number of sub-stages). Cost vs. accuracy trade-off should be discussed.
-3. **Phase Space**: Symplectic integrators preserve the elliptical orbit shape over long times; RK4 slowly deforms the ellipse (amplitude drift).
-4. **Coefficient Signs**: Negative coefficients (e.g., in 6th and 8th order) imply backward substeps; mathematically fine but can amplify rounding errors for stiff problems.
-5. **Computational Cost**: Stage counts: 3 (order 4), 7 (order 6), 15 (order 8). Effective force evaluations per global step scale accordingly.
+1. **Energy Conservation**: Symplectic Yoshida methods show bounded, quasi-periodic energy error that does not drift secularly; RK4 exhibits a **linear drift** over long times (not exponential—the harmonic oscillator is stable and integrable).
+
+2. **Why RK4 drifts linearly (not exponentially)**:
+   - The harmonic oscillator is stable; errors don't amplify exponentially
+   - RK4 introduces a small systematic energy bias per oscillation period
+   - Over N periods, this accumulates linearly: ΔH ≈ C·N ≈ C·t
+   - Exponential growth would require an unstable system or numerical instability (neither applies here)
+
+3. **Order vs. Stability**: Higher-order Yoshida methods (6, 8) allow larger step sizes for a target accuracy but require more force evaluations per step (number of sub-stages). Cost vs. accuracy trade-off should be discussed.
+
+4. **Symplectic Structure**: Symplectic integrators preserve a "shadow Hamiltonian" H* close to the true H, resulting in bounded oscillatory error rather than secular drift.
+
+5. **Coefficient Signs**: Negative coefficients (e.g., in order 6 and 8) imply backward substeps; mathematically valid for symplectic schemes but can amplify rounding errors in some contexts.
+
+6. **Computational Cost**: Stage counts: 3 (order 4), 9 (order 6), 27 (order 8). Effective force evaluations per global step scale accordingly.
 
 ## Extending
 - Add adaptive step size (not typical for symplectic splitting but possible with caution).
 - Implement other symplectic schemes (Forest–Ruth, Suzuki, Omelyan). 
 - Generalize to multi-dimensional oscillators / non-quadratic potentials.
+- Add convergence study mode to plot error vs timestep on log-log scale.
+
+## Virtual Environment
+The script automatically bootstraps a Python virtual environment (`.venv`) and installs required packages (`numpy`, `matplotlib`) on first run. No manual setup needed—just run:
+```powershell
+python hw4_problem3.py --demo --plot
+```
 
 ## Reference
 H. Yoshida, "Construction of higher order symplectic integrators", Physics Letters A, 150 (1990) 262–268.
 
 ## License
 Educational use for HW4; no external license specified.
+
+---
+Last updated: 2025-11-13

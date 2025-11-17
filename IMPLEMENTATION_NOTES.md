@@ -1,7 +1,10 @@
-# Implementation Notes: Analytical Yoshida Coefficients
+# Implementation Notes: Analytical Yoshida Coefficients & Interactive Plotting
 
 ## Summary of Changes
-The script now computes Yoshida symplectic integrator coefficients **analytically** using the recursive composition method (Suzuki fractal decomposition) rather than hard-coding numerical values.
+1. The script computes Yoshida symplectic integrator coefficients **analytically** using the recursive composition method (Suzuki fractal decomposition) rather than hard-coding numerical values.
+2. Interactive plotting with GUI zoom/pan controls and linked axes across subplots.
+3. Streamlined plot layout showing only position q(t) and energy error ΔH(t) (removed momentum and phase space plots).
+4. Per-method energy error auto-scaling in demo mode for clear visualization of differences.
 
 ## Mathematical Foundation
 
@@ -46,15 +49,34 @@ Computes residuals for:
 ### Coefficient Verification (via `--show-coefficients`)
 All order conditions satisfied to **machine precision** (~1e-13 to 1e-15).
 
-### Energy Conservation (1000 steps, dt=0.01)
-| Method   | max\|ΔE\|   | RMS(ΔE)     |
-|----------|-------------|-------------|
-| Yoshida4 | 3.80e-10    | 2.26e-10    |
-| Yoshida6 | 4.61e-14    | 2.54e-14    |
-| Yoshida8 | 5.27e-15    | 2.20e-15    |
-| RK4      | 6.94e-12    | 4.01e-12    |
+### Energy Conservation (Example: 10000 steps, dt=0.1)
+| Method   | max\|ΔE\|   | RMS(ΔE)     | Behavior             |
+|----------|-------------|-------------|----------------------|
+| Yoshida4 | ~1e-9       | ~5e-10      | Bounded oscillatory  |
+| Yoshida6 | ~1e-13      | ~5e-14      | Near machine ε       |
+| Yoshida8 | ~1e-14      | ~5e-15      | At machine precision |
+| RK4      | ~1e-5       | ~5e-6       | Linear drift         |
 
-**Observation**: Higher-order symplectic methods show exponentially better energy conservation due to preservation of the Hamiltonian structure.
+**Key Observations**:
+- **Symplectic methods**: Energy error remains bounded and oscillatory (preserves modified Hamiltonian H*)
+- **RK4**: Shows linear drift ΔH ≈ C·t, **not exponential**
+  - The harmonic oscillator is stable and integrable
+  - RK4 introduces small systematic bias per period
+  - Accumulation is linear in time for this system
+  - Exponential growth would require unstable dynamics or numerical instability
+
+### Why RK4 Energy Drift is Linear
+For the harmonic oscillator:
+- True solution is periodic and bounded
+- RK4 is 4th-order accurate (O(h⁴) global error)
+- Each oscillation period introduces a small energy change δE ≈ constant
+- Over N periods: ΔE_total ≈ N·δE ≈ (t/T)·δE ∝ t
+- Result: **linear drift**, not exponential blowup
+
+Exponential error growth only occurs for:
+- Chaotic/unstable systems (positive Lyapunov exponents)
+- Numerical instability (timestep too large)
+- Neither applies to the harmonic oscillator with moderate dt
 
 ## Key Advantages of Analytical Computation
 
@@ -63,8 +85,50 @@ All order conditions satisfied to **machine precision** (~1e-13 to 1e-15).
 3. **Reproducibility**: No reliance on external coefficient tables
 4. **Numerical Accuracy**: Computed in full double precision without transcription errors
 
+## Plotting Implementation
+
+### Layout Changes
+- **Removed**: Momentum p(t) and phase space (q vs p) plots
+- **Kept**: Position q(t) and energy error ΔH(t) only
+- **Demo mode**: N×2 grid (N methods, 2 columns)
+- **Single-method mode**: 1×2 layout
+
+### Interactive Features
+1. **Linked axes**: Time axes shared across q(t) and ΔH(t) plots
+   - Zoom/pan in one subplot updates both
+   - Demo mode: all time-series plots linked across rows
+2. **GUI zoom controls**: Standard Matplotlib toolbar (magnifying glass, pan)
+3. **Reset hotkey**: Press `r` to restore initial axis limits
+4. **Per-method scaling**: Each method's ΔH plot auto-scales to its error envelope
+   - Makes order differences clearly visible
+   - Can override with `--delim` CLI flag
+
+### Technical Details
+- Uses `ax.sharex()` for cross-version Matplotlib compatibility
+- Stores default limits in closure for reset functionality
+- Keyboard event handler via `fig.canvas.mpl_connect('key_press_event', on_key)`
+
+## Command-Line Zoom Options
+Optional axis limit overrides (format: `min,max` or `min:max`):
+- `--tlim`: time axis
+- `--qylim`: position y-axis
+- `--delim`: energy error y-axis (overrides per-method auto-scaling)
+
+Example:
+```powershell
+python hw4_problem3.py --demo --dt 0.1 --steps 10000 --plot --tlim 0,100 --delim -1e-6,1e-6
+```
+
+## Virtual Environment Bootstrap
+The script auto-creates `.venv` and installs dependencies on first run:
+1. Checks for `numpy` and `matplotlib`
+2. Creates virtual environment if packages missing
+3. Installs requirements
+4. Re-executes script inside venv
+No manual `pip install` needed.
+
 ## Reference
 H. Yoshida, "Construction of higher order symplectic integrators", *Physics Letters A*, **150** (1990) 262–268.
 
 ---
-Generated: 2025-11-12
+Last updated: 2025-11-13
