@@ -260,15 +260,23 @@ def integrate_yoshida(order: int, q0: float, p0: float, dt: float, steps: int) -
         # Apply Yoshida composition using kick-drift-kick pattern
         # First half-kick
         qn, pn = kick_step(qn, pn, 0.5 * coeffs[0] * dt)
-        
+        qn, pn = drift_step(qn, pn, coeffs[0] * dt) 
+        qn, pn = kick_step(qn, pn, 0.5 * coeffs[0] * dt) 
+        qn, pn = kick_step(qn, pn, 0.5 * coeffs[1] * dt)
+        qn, pn = drift_step(qn, pn, coeffs[1] * dt) 
+        qn, pn = kick_step(qn, pn, 0.5 * coeffs[1] * dt)
+        qn, pn = kick_step(qn, pn, 0.5 * coeffs[2] * dt)
+        qn, pn = drift_step(qn, pn, coeffs[2] * dt) 
+        qn, pn = kick_step(qn, pn, 0.5 * coeffs[2] * dt)
+        #print(qn,pn)
         # Middle stages: full drift, then combined half-kicks
-        for i in range(n_stages - 1):
-            qn, pn = drift_step(qn, pn, coeffs[i] * dt)
+        '''for i in range(n_stages - 1):
+            
             qn, pn = kick_step(qn, pn, 0.5 * (coeffs[i] + coeffs[i+1]) * dt)
         
         # Final drift and half-kick
         qn, pn = drift_step(qn, pn, coeffs[-1] * dt)
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[-1] * dt)
+        qn, pn = kick_step(qn, pn, 0.5 * coeffs[-1] * dt)'''
         
         q[n+1], p[n+1] = qn, pn
     
@@ -303,7 +311,7 @@ def integrate_rk4(q0: float, p0: float, dt: float, steps: int) -> IntegrationRes
 
 def energy_metrics(res: IntegrationResult) -> Dict[str, float]:
     E0 = res.energy[0]
-    dE = res.energy - E0
+    dE = np.abs(res.energy - E0)/np.abs(E0)
     return {
         "E0": E0,
         "E_mean": float(res.energy.mean()),
@@ -372,7 +380,7 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
         # Second pass: plot with consistent limits
         for idx, (label, res) in enumerate(results.items()):
             E0 = res.energy[0]
-            dE = res.energy - E0
+            dE = np.abs(res.energy - E0)/np.abs(E0)
             
             # Position vs time
             axs[idx, 0].plot(res.t, res.q, color='C0')
@@ -385,6 +393,7 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
                 axs[idx, 0].set_xlabel('Time (t)')
             
             # Energy error vs time
+            print(dE)
             axs[idx, 1].plot(res.t, dE, color='C3')
             axs[idx, 1].set_ylabel('Energy Error (ΔH)')
             axs[idx, 1].set_title(f'{label}: Energy Error vs Time')
@@ -452,8 +461,8 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
         # Plot energy error vs time
         for label, res in results.items():
             E0 = res.energy[0]
-            dE = res.energy - E0
-            ax_error.plot(res.t, dE, label=label, alpha=0.8)
+            dE = np.abs(res.energy - E0) / np.abs(E0)
+            ax_error.plot(res.t, np.log10(dE), label=label, alpha=0.8)
         ax_error.set_xlim(t_lim)
         if zoom and zoom.get('delim') is not None:
             ax_error.set_ylim(_pick_lim((0.0, 1.0), 'delim'))
