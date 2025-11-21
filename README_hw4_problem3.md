@@ -84,6 +84,7 @@ python hw4_problem3.py --demo --dt 0.1 --steps 10000 --plot --tlim 0,100 --delim
 - `--plot`: generate plots (position vs time and energy error vs time).
 - `--demo`: run all Yoshida orders plus RK4 and compare.
 - `--show-coefficients`: display computed coefficients and order condition residuals.
+- `--log-error`: plot energy error on logarithmic scale (for visualizing small errors).
 
 ### Zoom/Limit Options (Optional)
 Fine-tune plot axes (format: `min,max` or `min:max`):
@@ -97,8 +98,14 @@ Note: Phase space and momentum plots have been removed; only position and energy
 For each run the script can report:
 - `E0`: initial energy.
 - `mean`, `std`: statistics of sampled energies.
-- `max|dE|`: maximum absolute deviation from initial energy.
-- `rms(dE)`: root mean square energy deviation.
+- `max|dE/E0|`: maximum **normalized relative energy error** (dimensionless).
+- `rms(dE/E0)`: root mean square normalized relative energy error.
+
+**Important**: All energy error calculations use **normalized relative error**:
+```
+dE/E0 = |E(t) - E0| / |E0|
+```
+This dimensionless quantity allows fair comparison across different initial conditions and represents the fractional energy deviation (e.g., 1.0e-4 = 0.01% error).
 
 ## Plotting Features
 The script generates interactive plots using Matplotlib:
@@ -106,10 +113,10 @@ The script generates interactive plots using Matplotlib:
 ### Plot Layout
 - **Demo mode**: N×2 grid (one row per method)
   - Column 1: Position q(t) vs time
-  - Column 2: Energy error ΔH(t) vs time
+  - Column 2: Relative energy error |ΔH/E₀| vs time (normalized, dimensionless)
 - **Single-method mode**: 1×2 layout
   - Left: Position q(t) vs time
-  - Right: Energy error ΔH(t) vs time
+  - Right: Relative energy error |ΔH/E₀| vs time (normalized, dimensionless)
 
 ### Interactive Controls
 - **Zoom/Pan**: Use the Matplotlib toolbar (magnifying glass for zoom, hand for pan)
@@ -118,9 +125,15 @@ The script generates interactive plots using Matplotlib:
 - **Per-method scaling**: In demo mode, each method's energy error plot auto-scales to its own error envelope (unless overridden with `--delim`)
 
 ## Observations (Guidance for Report)
-1. **Energy Conservation**: Symplectic Yoshida methods show bounded, quasi-periodic energy error that does not drift secularly; RK4 exhibits a **linear drift** over long times (not exponential—the harmonic oscillator is stable and integrable).
+1. **Energy Conservation**: Symplectic Yoshida methods show bounded, quasi-periodic **relative** energy error that does not drift secularly; RK4 exhibits a **linear drift** over long times (not exponential—the harmonic oscillator is stable and integrable).
 
-2. **Why RK4 drifts linearly (not exponentially)**:
+2. **Normalized Relative Error**: All energy errors are reported as |ΔH/E₀|, a dimensionless quantity representing fractional energy deviation. For example:
+   - RK4 (dt=0.1, 10k steps): max |ΔH/E₀| ≈ 1.4×10⁻⁴ (0.014% error)
+   - Yoshida-4: max |ΔH/E₀| ≈ 7.7×10⁻⁶ (0.00077% error) — 18× better
+   - Yoshida-6: max |ΔH/E₀| ≈ 9.2×10⁻⁸ (0.0000092% error) — 1,500× better
+   - Yoshida-8: max |ΔH/E₀| ≈ 7.2×10⁻¹¹ (near machine precision) — 1.9M× better
+
+3. **Why RK4 drifts linearly (not exponentially)**:
    - The harmonic oscillator is stable; errors don't amplify exponentially
    - RK4 introduces a small systematic energy bias per oscillation period
    - Over N periods, this accumulates linearly: ΔH ≈ C·N ≈ C·t
@@ -140,6 +153,22 @@ The script generates interactive plots using Matplotlib:
 - Generalize to multi-dimensional oscillators / non-quadratic potentials.
 - Add convergence study mode to plot error vs timestep on log-log scale.
 
+## LaTeX Documentation
+The repository includes:
+- `hw4_problem3_methodology.tex`: Complete LaTeX document with mathematical formulation, implementation details, results, and analysis
+- `generate_plots_for_latex.py`: Generates publication-quality individual method plots (300 DPI PNG files):
+  - `rk4_results.png`: RK4 position and relative energy error
+  - `yoshida4_results.png`: Yoshida-4 position and relative energy error
+  - `yoshida6_results.png`: Yoshida-6 position and relative energy error
+  - `yoshida8_results.png`: Yoshida-8 position and relative energy error
+
+To generate LaTeX plots:
+```powershell
+python generate_plots_for_latex.py
+```
+
+All plots use normalized relative energy error (|ΔH/E₀|) for consistent comparison.
+
 ## Virtual Environment
 The script automatically bootstraps a Python virtual environment (`.venv`) and installs required packages (`numpy`, `matplotlib`) on first run. No manual setup needed—just run:
 ```powershell
@@ -153,4 +182,4 @@ H. Yoshida, "Construction of higher order symplectic integrators", Physics Lette
 Educational use for HW4; no external license specified.
 
 ---
-Last updated: 2025-11-13
+Last updated: 2025-11-20

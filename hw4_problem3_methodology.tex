@@ -19,10 +19,6 @@
 
 \maketitle
 
-\section{Introduction}
-
-This report presents the implementation and analysis of high-order symplectic integrators for the simple harmonic oscillator using Yoshida composition methods. We compare Yoshida integrators of orders 4, 6, and 8 against the classical fourth-order Runge-Kutta (RK4) method, focusing on long-term energy conservation properties.
-
 \section{Problem Formulation}
 
 \subsection{The Harmonic Oscillator}
@@ -51,11 +47,11 @@ with the energy conserved: $H(q(t), p(t)) = H(q_0, p_0) = E_0$ for all $t$.
 
 \subsection{Symplectic Structure}
 
-Hamiltonian systems possess a symplectic structure that preserves phase space volume. A numerical integrator is \textbf{symplectic} if it preserves this structure exactly (up to machine precision). Symplectic integrators provide excellent long-term energy conservation, making them ideal for orbital mechanics and molecular dynamics.
+Hamiltonian systems possess a symplectic structure that preserves phase space volume. A numerical integrator is \textbf{symplectic} if it preserves this structure exactly (up to machine precision).
 
-\subsection{The Leapfrog Method (Velocity-Verlet)}
+\subsection{The Leapfrog Method}
 
-The second-order leapfrog integrator (also known as velocity-Verlet or St\"ormer-Verlet) is the foundation of our approach. It splits the Hamiltonian operator into kinetic and potential parts and applies them in sequence:
+The second-order leapfrog integrator splits the Hamiltonian operator into kinetic and potential parts and applies them in sequence:
 
 \begin{equation}
 S(h) = K\left(\frac{h}{2}\right) \circ D(h) \circ K\left(\frac{h}{2}\right)
@@ -81,7 +77,7 @@ This method is second-order accurate: $\mathcal{O}(h^2)$, and is symplectic.
 
 \subsection{Recursive Composition Formula}
 
-The Yoshida method (also known as Suzuki's fractal decomposition) constructs higher even-order symplectic integrators by recursively composing lower-order ones. Given a symplectic integrator $S_{2k-2}(h)$ of order $2k-2$, we construct an order-$2k$ integrator:
+The Yoshida method constructs higher even-order symplectic integrators by recursively composing lower-order ones. Given a symplectic integrator $S_{2k-2}(h)$ of order $2k-2$, we construct an order-$2k$ integrator:
 
 \begin{equation}
 S_{2k}(h) = S_{2k-2}(w_1 h) \circ S_{2k-2}(w_0 h) \circ S_{2k-2}(w_1 h)
@@ -170,19 +166,21 @@ We integrate the harmonic oscillator with:
 \begin{itemize}
     \item Initial conditions: $q_0 = 1.0$, $p_0 = 0.0$
     \item Initial energy: $E_0 = 0.5$
-    \item Timestep: $\Delta t = 0.1$
-    \item Total steps: 10,000 (final time $t_f = 1000$)
+    \item \textbf{Timestep: $\Delta t = 0.1$}
+    \item \textbf{Total steps: 10,000} (final time $t_f = 1000$, corresponding to $\sim$159 orbits)
     \item Methods compared: RK4, Yoshida order 4 (Y4), Yoshida order 6 (Y6), Yoshida order 8 (Y8)
 \end{itemize}
 
+All simulations use the same timestep $\Delta t = 0.1$ and integrate for 10,000 steps to enable direct comparison of accuracy.
+
 \subsection{Energy Error Definition}
 
-The energy error is computed as:
+The relative energy error is computed as:
 \begin{equation}
-\Delta H(t) = H(q(t), p(t)) - E_0
+\frac{|\Delta H|}{|E_0|} = \frac{|H(q(t), p(t)) - E_0|}{|E_0|}
 \end{equation}
 
-For the harmonic oscillator, exact energy conservation means $\Delta H(t) = 0$ for all $t$.
+This normalized dimensionless quantity allows fair comparison across different initial energies. For the harmonic oscillator, exact energy conservation means $\Delta H(t) = 0$ for all $t$.
 
 \section{Results}
 
@@ -212,12 +210,12 @@ Each timestep requires \textbf{4 force evaluations}.
 \label{fig:rk4}
 \end{figure}
 
-\vspace{1.5cm}
-\textbf{Analysis:}
+\textbf{Observations from Figure~\ref{fig:rk4}:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Position plot (left)}: The oscillatory trajectory is visually indistinguishable from the exact solution over 159 orbits, demonstrating that RK4 accurately captures the periodic motion.
+    \item \textbf{Energy error plot (right)}: Shows a clear \emph{monotonic linear drift} in the normalized relative energy error. The energy systematically decreases over time, reaching a maximum deviation of $1.39 \times 10^{-4}$ (0.014\% error) by $t=1000$.
+    \item \textbf{Non-symplectic behavior}: The linear accumulation of error is characteristic of non-symplectic integrators. RK4 does not preserve the geometric structure of Hamiltonian systems, leading to secular drift rather than bounded oscillations.
+    \item \textbf{Cumulative nature}: The error grows approximately as $\Delta H \propto t$, meaning longer integrations will continue to lose energy without bound.
 \end{itemize}
 
 \subsection{Yoshida Order 4 Results}
@@ -241,12 +239,13 @@ Each timestep requires \textbf{6 force evaluations} (3 substeps $\times$ 2 per l
 \label{fig:y4}
 \end{figure}
 
-\vspace{1.5cm}
-\textbf{Analysis:}
+\textbf{Observations from Figure~\ref{fig:y4}:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Position plot (left)}: Maintains accurate periodic oscillations throughout the entire integration, identical in appearance to RK4.
+    \item \textbf{Energy error plot (right)}: Exhibits \emph{bounded oscillations} around zero with amplitude $\sim 7.7 \times 10^{-6}$ (0.00077\% error). No secular drift is observed.
+    \item \textbf{Symplectic preservation}: The bounded nature of the error demonstrates that Y4 preserves the symplectic structure. Energy oscillates but never systematically drifts away from the true value.
+    \item \textbf{18$\times$ improvement over RK4}: Despite having the same formal order of accuracy ($\mathcal{O}(h^4)$), Y4 achieves significantly better energy conservation than RK4 due to structure preservation.
+    \item \textbf{Computational cost}: Uses 1.5$\times$ more force evaluations than RK4 (6 vs 4), making this an excellent trade-off for long-term integration.
 \end{itemize}
 
 \subsection{Yoshida Order 6 Results}
@@ -270,12 +269,13 @@ Each timestep requires \textbf{18 force evaluations} (9 substeps $\times$ 2 per 
 \label{fig:y6}
 \end{figure}
 
-\vspace{1.5cm}
-\textbf{Analysis:}
+\textbf{Observations from Figure~\ref{fig:y6}:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Position plot (left)}: Continues to show excellent agreement with the exact solution over the entire integration period.
+    \item \textbf{Energy error plot (right)}: Bounded oscillations with dramatically reduced amplitude $\sim 9.2 \times 10^{-8}$ (0.000009\% error), nearly two orders of magnitude better than Y4.
+    \item \textbf{Higher-order accuracy}: The sixth-order method shows the expected improvement in error magnitude, with error scaling as $\mathcal{O}(h^6)$.
+    \item \textbf{84$\times$ improvement over Y4}: The increased computational cost (18 vs 6 force evaluations) is justified by the substantial gain in accuracy.
+    \item \textbf{Long-term stability}: The bounded oscillations remain stable even after 159 orbits, demonstrating excellent phase space structure preservation.
 \end{itemize}
 
 \subsection{Yoshida Order 8 Results}
@@ -299,55 +299,76 @@ Each timestep requires \textbf{54 force evaluations} (27 substeps $\times$ 2 per
 \label{fig:y8}
 \end{figure}
 
-\vspace{1.5cm}
-\textbf{Analysis:}
+\textbf{Observations from Figure~\ref{fig:y8}:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Position plot (left)}: Maintains perfect periodic behavior indistinguishable from the exact solution.
+    \item \textbf{Energy error plot (right)}: Bounded oscillations at the level of $\sim 7.2 \times 10^{-11}$ (0.0000000072\% error), approaching the limits of double-precision floating-point arithmetic.
+    \item \textbf{Near machine precision}: The error magnitude is only about 5 orders of magnitude above machine epsilon ($\sim 2.2 \times 10^{-16}$ for double precision), indicating that numerical roundoff begins to dominate truncation error.
+    \item \textbf{1,270$\times$ improvement over Y6}: Three orders of magnitude better than Y6, demonstrating the power of eighth-order accuracy.
+    \item \textbf{Computational cost}: Requires 54 force evaluations per step (13.5$\times$ more than RK4), but delivers energy conservation 1.9 million times better than RK4.
+    \item \textbf{Practical limit}: For this problem and timestep, Y8 represents near-optimal accuracy; further order increases would be limited by roundoff error rather than truncation error.
 \end{itemize}
 
 \subsection{Quantitative Energy Statistics}
 
-Table~\ref{tab:energy_stats} summarizes the energy conservation statistics for each method:
+Table~\ref{tab:energy_stats} summarizes the energy conservation statistics for each method over the entire integration period ($\Delta t = 0.1$, 10,000 steps):
 
 \begin{table}[H]
 \centering
 \begin{tabular}{|l|c|c|c|c|}
 \hline
-\textbf{Method} & \textbf{Mean $\Delta H$} & \textbf{Std Dev $\Delta H$} & \textbf{Max $|\Delta H|$} & \textbf{Final $\Delta H$} \\
+\textbf{Method} & \textbf{Mean $|\Delta H/E_0|$} & \textbf{Std Dev $|\Delta H/E_0|$} & \textbf{Max $|\Delta H/E_0|$} & \textbf{Final $|\Delta H/E_0|$} \\
 \hline
-RK4 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
-Yoshida-4 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
-Yoshida-6 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
-Yoshida-8 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+RK4       & $6.94 \times 10^{-5}$ & $4.00 \times 10^{-5}$ & $1.39 \times 10^{-4}$ & $1.39 \times 10^{-4}$ \\
+Yoshida-4 & $3.83 \times 10^{-6}$ & $2.71 \times 10^{-6}$ & $7.66 \times 10^{-6}$ & $5.19 \times 10^{-6}$ \\
+Yoshida-6 & $4.58 \times 10^{-8}$ & $3.24 \times 10^{-8}$ & $9.17 \times 10^{-8}$ & $6.27 \times 10^{-8}$ \\
+Yoshida-8 & $3.61 \times 10^{-11}$ & $2.55 \times 10^{-11}$ & $7.22 \times 10^{-11}$ & $4.94 \times 10^{-11}$ \\
 \hline
 \end{tabular}
-\caption{Energy conservation statistics over $t \in [0, 1000]$.}
+\caption{Normalized relative energy error statistics over $t \in [0, 1000]$ with $\Delta t = 0.1$ (10,000 steps). The normalized error $|\Delta H/E_0|$ is dimensionless and shows the fractional energy deviation.}
 \label{tab:energy_stats}
 \end{table}
 
-% LEAVE SPACE FOR ANALYSIS
-\vspace{2cm}
-\textbf{Analysis:}
+\textbf{Key Observations:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{RK4 exhibits systematic drift}: Final error equals maximum error ($1.39 \times 10^{-4}$), indicating monotonic energy loss without bounded oscillation.
+    \item \textbf{Yoshida methods show bounded oscillations}: Final $\approx$ Mean for all Yoshida integrators, confirming energy oscillates around the true value.
+    \item \textbf{Order scaling}: Y4 is 18$\times$ better than RK4; Y6 is 84$\times$ better than Y4; Y8 is 1,270$\times$ better than Y6.
+    \item \textbf{Y8 approaches machine precision}: Relative errors below $10^{-10}$ demonstrate exceptional long-term stability.
 \end{itemize}
 
 \section{Discussion}
 
 \subsection{Symplectic vs Non-Symplectic Integrators}
 
-\vspace{2cm}
-\textbf{Discussion:}
+The results clearly demonstrate the fundamental difference between symplectic and non-symplectic integration schemes for Hamiltonian systems:
+
+\textbf{Non-Symplectic Methods (RK4):}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Structure}: Do not preserve the symplectic 2-form $dp \wedge dq$ that characterizes Hamiltonian phase space.
+    \item \textbf{Energy behavior}: Exhibit systematic drift in conserved quantities. For our harmonic oscillator, RK4 shows linear energy loss: $\Delta H \approx -1.4 \times 10^{-7} \cdot t$.
+    \item \textbf{Long-term dynamics}: Phase space volume is not preserved, leading to artificial dissipation or excitation. Over many orbits, trajectories drift away from the correct manifold.
+    \item \textbf{Error accumulation}: Truncation errors in conserved quantities accumulate secularly, making long-term integration unreliable.
+    \item \textbf{When to use}: Suitable for short-term integration, dissipative systems, or when high-order accuracy per step is more important than structure preservation.
 \end{itemize}
+
+\textbf{Symplectic Methods (Yoshida):}
+\begin{itemize}
+    \item \textbf{Structure}: Exactly preserve the symplectic structure at each timestep (up to machine precision).
+    \item \textbf{Energy behavior}: Conserved quantities exhibit \emph{bounded oscillations} without secular drift. The "shadow Hamiltonian" theorem guarantees that symplectic integrators exactly conserve a nearby Hamiltonian $\tilde{H} = H + \mathcal{O}(h^p)$, where $p$ is the method order.
+    \item \textbf{Long-term dynamics}: Phase space volume preservation (Liouville's theorem) is maintained. Trajectories remain on the correct energy surface for arbitrarily long times.
+    \item \textbf{Error accumulation}: Errors oscillate but do not grow. This makes symplectic methods ideal for astronomical calculations, molecular dynamics, and other long-term Hamiltonian simulations.
+    \item \textbf{When to use}: Essential for long-term integration of conservative systems, orbital mechanics, particle accelerators, and any application where preserving physical invariants is critical.
+\end{itemize}
+
+\textbf{Operator Splitting Philosophy:}
+
+Symplectic integrators like Yoshida methods are based on \emph{operator splitting}, decomposing the Hamiltonian evolution into exactly solvable pieces:
+\begin{equation}
+e^{h\mathcal{L}} = e^{h(\mathcal{L}_T + \mathcal{L}_V)} \approx e^{w_1 h \mathcal{L}_T} e^{w_1 h \mathcal{L}_V} e^{w_0 h \mathcal{L}_T} e^{w_0 h \mathcal{L}_V} \cdots
+\end{equation}
+
+where $\mathcal{L}_T$ and $\mathcal{L}_V$ are the kinetic and potential Liouville operators. Each exponential is symplectic (being the exact flow of a Hamiltonian subsystem), so their composition is also symplectic. This is fundamentally different from RK4, which approximates the full derivative without respecting the Hamiltonian structure.
 
 \subsection{Order of Accuracy and Computational Cost}
 
@@ -359,33 +380,121 @@ The computational cost scales with the number of force evaluations:
     \item Yoshida-8: 27 substeps $\times$ 2 = 54 evaluations
 \end{itemize}
 
-\vspace{2cm}
-\textbf{Discussion:}
+\textbf{Cost-Accuracy Trade-offs:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Method} & \textbf{Cost Ratio} & \textbf{Accuracy Gain} & \textbf{Efficiency} \\
+                & (vs RK4)            & (vs RK4)                & (Gain/Cost) \\
+\hline
+RK4       & 1.0$\times$  & 1$\times$ (baseline)  & 1.0 \\
+Yoshida-4 & 1.5$\times$  & 18$\times$            & 12.0 \\
+Yoshida-6 & 4.5$\times$  & 1,500$\times$         & 333 \\
+Yoshida-8 & 13.5$\times$ & 1,900,000$\times$     & 141,000 \\
+\hline
+\end{tabular}
+\caption{Computational efficiency comparison: accuracy improvement per unit cost increase.}
+\end{table}
+
+\textbf{Analysis:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Yoshida-4}: Modest 50\% cost increase yields 18$\times$ better energy conservation. Excellent choice for most long-term integrations.
+    \item \textbf{Yoshida-6}: The 4.5$\times$ cost increase is more than justified by the 1,500$\times$ accuracy improvement. Best overall efficiency ratio.
+    \item \textbf{Yoshida-8}: Extreme accuracy at 13.5$\times$ the cost of RK4. Justified when near-machine-precision conservation is required or when timestep cannot be reduced.
+    \item \textbf{Recursive cost}: The exponential growth ($3^{k-1}$) in substeps means that beyond order 8, computational cost becomes prohibitive for most applications.
+\end{itemize}
+
+\textbf{Timestep Selection:}
+
+An alternative to increasing order is to reduce the timestep. For a method of order $p$, halving $\Delta t$ improves accuracy by $2^p$ but doubles the number of steps (and thus total cost). Comparing approaches:
+\begin{itemize}
+    \item To match Y8 accuracy, RK4 would need $\Delta t \approx 10^{-4}$ (1000$\times$ smaller), requiring 10 million steps vs Y8's 10,000 steps—a factor of 74$\times$ more expensive than Y8.
+    \item High-order symplectic methods allow larger timesteps while maintaining accuracy and structure preservation, making them more efficient for long integrations.
 \end{itemize}
 
 \subsection{Practical Considerations}
 
-\vspace{2cm}
-\textbf{Discussion:}
+\textbf{Advantages of Symplectic Methods:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item \textbf{Long-term stability}: Bounded errors make simulations reliable over millions of timesteps.
+    \item \textbf{Physical fidelity}: Conserved quantities remain conserved, periodic orbits remain periodic.
+    \item \textbf{Time reversibility}: Symplectic integrators are time-reversible, matching the physics.
+    \item \textbf{No artificial damping}: Conservative systems remain conservative.
+\end{itemize}
+
+\textbf{Disadvantages of Symplectic Methods:}
+\begin{itemize}
+    \item \textbf{Hamiltonian-only}: Only applicable to systems that can be written in Hamiltonian form. Cannot handle velocity-dependent forces (e.g., magnetic fields in non-canonical coordinates) or dissipation directly.
+    \item \textbf{Implicit schemes}: Higher-order symplectic methods often require implicit solves, though operator-splitting methods like Yoshida avoid this.
+    \item \textbf{Negative timesteps}: Composition methods use $w_0 < 0$, which can cause issues in systems with singularities or discontinuities.
+    \item \textbf{Setup complexity}: Requires separable Hamiltonian and implementation of operator splitting.
+\end{itemize}
+
+\textbf{Application Domains:}
+\begin{itemize}
+    \item \textbf{Celestial mechanics}: Planetary motion, satellite orbits, N-body gravitational systems.
+    \item \textbf{Molecular dynamics}: Long-time simulation of molecular systems, protein folding.
+    \item \textbf{Plasma physics}: Particle-in-cell simulations, beam dynamics in accelerators.
+    \item \textbf{Classical field theory}: Lattice gauge theories, nonlinear wave equations.
+\end{itemize}
+
+\textbf{Application Domains:}
+\begin{itemize}
+    \item \textbf{Celestial mechanics}: Planetary motion, satellite orbits, N-body gravitational systems.
+    \item \textbf{Molecular dynamics}: Long-time simulation of molecular systems, protein folding.
+    \item \textbf{Plasma physics}: Particle-in-cell simulations, beam dynamics in accelerators.
+    \item \textbf{Classical field theory}: Lattice gauge theories, nonlinear wave equations.
 \end{itemize}
 
 \section{Conclusions}
 
-\vspace{3cm}
-\textbf{Conclusions:}
+This study has demonstrated the superiority of symplectic integration methods over traditional non-symplectic schemes for long-term integration of Hamiltonian systems. The key findings are:
+
+\begin{enumerate}
+    \item \textbf{Structure preservation is crucial}: Symplectic integrators preserve the geometric structure of Hamiltonian phase space, leading to bounded energy errors. In contrast, RK4—despite being fourth-order accurate—exhibits systematic energy drift that accumulates linearly in time.
+    
+    \item \textbf{Yoshida composition delivers high-order symplectic methods}: By recursively composing the second-order leapfrog integrator with carefully chosen negative and positive timesteps, we achieved orders 4, 6, and 8 with relative energy errors of $7.7 \times 10^{-6}$, $9.2 \times 10^{-8}$, and $7.2 \times 10^{-11}$ respectively.
+    
+    \item \textbf{Dramatic accuracy improvements}: Using timestep $\Delta t = 0.1$ over 10,000 steps (159 orbits):
+    \begin{itemize}
+        \item Yoshida-4 is 18$\times$ more accurate than RK4
+        \item Yoshida-6 is 1,500$\times$ more accurate than RK4
+        \item Yoshida-8 is 1.9 million times more accurate than RK4
+    \end{itemize}
+    
+    \item \textbf{Excellent cost-efficiency}: The computational cost increases moderately (1.5$\times$, 4.5$\times$, 13.5$\times$ for Y4, Y6, Y8 vs RK4) while accuracy improvements are dramatic. Yoshida-6 offers the best efficiency ratio with 333$\times$ better accuracy per unit cost.
+    
+    \item \textbf{Bounded vs unbounded errors}: The most important distinction is qualitative: RK4's errors grow without bound ($\Delta H \propto t$), making long-term integration unreliable. Yoshida methods exhibit bounded oscillations, remaining stable indefinitely.
+    
+    \item \textbf{Approaching machine precision}: Yoshida-8 achieves energy conservation at the $10^{-11}$ level, only 5 orders of magnitude above double-precision roundoff. This represents the practical limit of accuracy for this timestep.
+    
+    \item \textbf{Operator splitting philosophy}: The success of Yoshida methods stems from splitting the Hamiltonian evolution into exactly solvable kick and drift operations, each of which is symplectic. This differs fundamentally from RK4's Taylor-series approximation approach.
+\end{enumerate}
+
+\textbf{Practical Recommendations:}
 \begin{itemize}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
-    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item For \textbf{moderate-accuracy} long-term integration: Use Yoshida-4. The 50\% cost increase over RK4 is negligible compared to the 18$\times$ accuracy gain and bounded error behavior.
+    
+    \item For \textbf{high-accuracy} applications: Use Yoshida-6. It provides the best balance of accuracy ($\sim 10^{-8}$ relative error) and computational cost.
+    
+    \item For \textbf{extreme-precision} needs: Use Yoshida-8, but be aware that roundoff errors may dominate. Consider using higher precision arithmetic if necessary.
+    
+    \item For \textbf{short-term integration} or \textbf{non-Hamiltonian systems}: RK4 remains a good choice due to its simplicity and efficiency.
 \end{itemize}
+
+\textbf{Broader Implications:}
+
+The principle of geometric integration—designing numerical methods that preserve the geometric properties of differential equations—extends beyond symplectic methods. Similar structure-preserving techniques exist for:
+\begin{itemize}
+    \item Volume-preserving flows (divergence-free vector fields)
+    \item Lie group integrators (for dynamics on manifolds)
+    \item Variational integrators (discrete variational principles)
+    \item Energy-preserving methods (discrete gradient methods)
+\end{itemize}
+
+For Hamiltonian systems requiring long-term integration, symplectic methods are not just preferable—they are essential. The Yoshida composition method provides a systematic, recursive way to achieve arbitrarily high order while maintaining symplecticity, making it a cornerstone technique in computational physics and geometric numerical integration.
 
 \section*{References}
 
@@ -393,6 +502,7 @@ The computational cost scales with the number of force evaluations:
     \item H. Yoshida, ``Construction of higher order symplectic integrators,'' \textit{Physics Letters A} \textbf{150}, 262--268 (1990).
     \item M. Suzuki, ``Fractal decomposition of exponential operators with applications to many-body theories and Monte Carlo simulations,'' \textit{Physics Letters A} \textbf{146}, 319--323 (1990).
     \item E. Hairer, C. Lubich, and G. Wanner, \textit{Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations}, 2nd ed., Springer (2006).
+    \item Generation of values, plots, and equations was utilized with the assistance of generative AI using Github Copilot Pro
 \end{itemize}
 
 \end{document}
