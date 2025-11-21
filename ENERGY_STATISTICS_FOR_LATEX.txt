@@ -1,0 +1,104 @@
+================================================================================
+ENERGY STATISTICS FOR LATEX TABLE
+Generated: November 20, 2025
+Parameters: dt=0.1, steps=10000, t_final=1000, q0=1.0, p0=0.0
+================================================================================
+
+INDIVIDUAL METHOD PLOTS GENERATED:
+- rk4_results.png        (307 KB) - RK4 position and energy error
+- yoshida4_results.png   (245 KB) - Yoshida-4 position and energy error
+- yoshida6_results.png   (246 KB) - Yoshida-6 position and energy error  
+- yoshida8_results.png   (283 KB) - Yoshida-8 position and energy error
+
+Each plot shows position (left) and energy error (right) for that specific method.
+
+================================================================================
+
+Format: Method | Mean ΔH | Std Dev ΔH | Max |ΔH| | Final ΔH
+
+RK4:
+  Mean ΔH:     -3.467722e-05
+  Std Dev ΔH:   2.002244e-05
+  Max |ΔH|:     6.935283e-05
+  Final ΔH:    -6.935283e-05
+
+Yoshida-4:
+  Mean ΔH:      1.915029e-06
+  Std Dev ΔH:   1.354702e-06
+  Max |ΔH|:     3.831966e-06
+  Final ΔH:     2.596356e-06
+
+Yoshida-6:
+  Mean ΔH:     -2.290352e-08
+  Std Dev ΔH:   1.620199e-08
+  Max |ΔH|:     4.582972e-08
+  Final ΔH:    -3.133608e-08
+
+Yoshida-8:
+  Mean ΔH:      1.804980e-11
+  Std Dev ΔH:   1.276487e-11
+  Max |ΔH|:     3.612244e-11
+  Final ΔH:     2.469891e-11
+
+================================================================================
+KEY OBSERVATIONS FOR YOUR ANALYSIS:
+================================================================================
+
+1. ENERGY CONSERVATION COMPARISON:
+   - RK4: Max error ~7e-5 (order 10^-5)
+   - Yoshida-4: Max error ~4e-6 (order 10^-6) - ~18x better than RK4
+   - Yoshida-6: Max error ~5e-8 (order 10^-8) - ~1400x better than RK4
+   - Yoshida-8: Max error ~4e-11 (order 10^-11) - ~2 million times better than RK4
+
+2. ERROR BEHAVIOR:
+   - RK4: Final error (-6.9e-5) shows LINEAR DRIFT over time
+     The negative value indicates systematic energy loss
+   
+   - Yoshida methods: Final errors comparable to max errors
+     Shows BOUNDED OSCILLATION without secular drift
+     Errors stay within a fixed range throughout integration
+
+3. ORDER OF ACCURACY SCALING:
+   - Y4 → Y6: ~100x improvement (2 orders of magnitude)
+   - Y6 → Y8: ~1000x improvement (3 orders of magnitude)
+   - Each increase in order dramatically improves energy conservation
+
+4. COMPUTATIONAL COST vs ACCURACY:
+   Number of force evaluations per timestep:
+   - RK4: 4 evaluations
+   - Y4: 6 evaluations (3 substeps × 2)
+   - Y6: 18 evaluations (9 substeps × 2)
+   - Y8: 54 evaluations (27 substeps × 2)
+   
+   For timestep dt=0.1:
+   - Y4 uses 50% more work than RK4 but achieves 18x better energy conservation
+   - Y6 uses 4.5x more work than RK4 but achieves 1400x better energy conservation
+   - Y8 uses 13.5x more work than RK4 but achieves 2 million times better conservation
+
+================================================================================
+PLOTS GENERATED:
+================================================================================
+
+1. position_vs_time.png (995 KB, 300 DPI)
+   - Shows all four methods maintain periodic oscillation
+   - All methods track each other well visually
+   - No visible amplitude decay or phase drift over 1000 time units
+
+2. energy_error_vs_time.png (220 KB, 300 DPI)
+   - Clearly shows RK4's linear drift (downward trend)
+   - Yoshida methods show bounded oscillations
+   - Different y-axis scales needed to see all methods
+   - Y8 error is at machine precision level (~10^-11)
+
+================================================================================
+LATEX TABLE FORMATTING:
+================================================================================
+
+Replace the lines in the table with:
+
+RK4          & -3.47e-05 & 2.00e-05 & 6.94e-05 & -6.94e-05 \\
+Yoshida-4    &  1.92e-06 & 1.35e-06 & 3.83e-06 &  2.60e-06 \\
+Yoshida-6    & -2.29e-08 & 1.62e-08 & 4.58e-08 & -3.13e-08 \\
+Yoshida-8    &  1.80e-11 & 1.28e-11 & 3.61e-11 &  2.47e-11 \\
+
+================================================================================

@@ -1,0 +1,314 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\geometry{margin=1in}
+
+\title{High-Order Symplectic Integration of the Harmonic Oscillator\\
+\large Using Yoshida Composition Methods}
+\author{HW4 Problem 3}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This report presents the implementation and analysis of high-order symplectic integrators for the simple harmonic oscillator using Yoshida composition methods. We compare Yoshida integrators of orders 4, 6, and 8 against the classical fourth-order Runge-Kutta (RK4) method, focusing on long-term energy conservation properties.
+
+\section{Problem Formulation}
+
+\subsection{The Harmonic Oscillator}
+
+The simple harmonic oscillator is described by the Hamiltonian:
+\begin{equation}
+H(q, p) = \frac{1}{2}(p^2 + q^2)
+\label{eq:hamiltonian}
+\end{equation}
+
+where $q$ is the position and $p$ is the momentum (all physical constants set to unity). The equations of motion are:
+\begin{align}
+\frac{dq}{dt} &= \frac{\partial H}{\partial p} = p \label{eq:qdot}\\
+\frac{dp}{dt} &= -\frac{\partial H}{\partial q} = -q \label{eq:pdot}
+\end{align}
+
+The exact solution is:
+\begin{align}
+q(t) &= q_0 \cos(t) + p_0 \sin(t) \\
+p(t) &= p_0 \cos(t) - q_0 \sin(t)
+\end{align}
+
+with the energy conserved: $H(q(t), p(t)) = H(q_0, p_0) = E_0$ for all $t$.
+
+\section{Symplectic Integration}
+
+\subsection{Symplectic Structure}
+
+Hamiltonian systems possess a symplectic structure that preserves phase space volume. A numerical integrator is \textbf{symplectic} if it preserves this structure exactly (up to machine precision). Symplectic integrators provide excellent long-term energy conservation, making them ideal for orbital mechanics and molecular dynamics.
+
+\subsection{The Leapfrog Method (Velocity-Verlet)}
+
+The second-order leapfrog integrator (also known as velocity-Verlet or St\"ormer-Verlet) is the foundation of our approach. It splits the Hamiltonian operator into kinetic and potential parts and applies them in sequence:
+
+\begin{equation}
+S(h) = K\left(\frac{h}{2}\right) \circ D(h) \circ K\left(\frac{h}{2}\right)
+\label{eq:leapfrog}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $K(\tau)$: ``Kick'' operator updates momentum: $p \rightarrow p - q\tau$ (uses force $F(q) = -q$)
+    \item $D(\tau)$: ``Drift'' operator updates position: $q \rightarrow q + p\tau$
+\end{itemize}
+
+Explicitly, for a timestep $h$:
+\begin{align}
+p_{1/2} &= p_n - q_n \cdot \frac{h}{2} \quad \text{(half kick)} \label{eq:lf_kick1}\\
+q_{n+1} &= q_n + p_{1/2} \cdot h \quad \text{(full drift)} \label{eq:lf_drift}\\
+p_{n+1} &= p_{1/2} - q_{n+1} \cdot \frac{h}{2} \quad \text{(half kick)} \label{eq:lf_kick2}
+\end{align}
+
+This method is second-order accurate: $\mathcal{O}(h^2)$, and is symplectic.
+
+\section{Yoshida Composition Method}
+
+\subsection{Recursive Composition Formula}
+
+The Yoshida method (also known as Suzuki's fractal decomposition) constructs higher even-order symplectic integrators by recursively composing lower-order ones. Given a symplectic integrator $S_{2k-2}(h)$ of order $2k-2$, we construct an order-$2k$ integrator:
+
+\begin{equation}
+S_{2k}(h) = S_{2k-2}(w_1 h) \circ S_{2k-2}(w_0 h) \circ S_{2k-2}(w_1 h)
+\label{eq:yoshida_composition}
+\end{equation}
+
+The composition weights are determined analytically:
+\begin{align}
+w_1 &= \frac{1}{2 - 2^{1/(2k-1)}} \label{eq:w1}\\
+w_0 &= 1 - 2w_1 \label{eq:w0}
+\end{align}
+
+Note that $w_0 < 0$ for $k \geq 2$, meaning we integrate ``backwards'' for part of the composition. This is essential for achieving higher-order error cancellation.
+
+\subsection{Order Conditions}
+
+The composition weights must satisfy:
+\begin{enumerate}
+    \item \textbf{Consistency}: $\sum_{i} w_i = 1$ (ensures the full timestep $h$ is covered)
+    \item \textbf{Odd-order cancellation}: $\sum_{i} w_i^{2j+1} = 0$ for $j = 1, 2, \ldots, k-1$
+\end{enumerate}
+
+These conditions guarantee that odd-order error terms cancel, leaving only even-order errors.
+
+\subsection{Construction of Yoshida Integrators}
+
+Starting from the second-order leapfrog $S_2(h)$, we recursively apply equation~\eqref{eq:yoshida_composition}:
+
+\subsubsection{Fourth-Order: $S_4(h)$}
+
+For $k=2$:
+\begin{align}
+w_1 &= \frac{1}{2 - 2^{1/3}} \approx 1.351207191959657 \\
+w_0 &= 1 - 2w_1 \approx -1.702414383919315
+\end{align}
+
+The composition $S_4(h) = S_2(w_1 h) \circ S_2(w_0 h) \circ S_2(w_1 h)$ requires \textbf{3 leapfrog substeps}.
+
+\subsubsection{Sixth-Order: $S_6(h)$}
+
+For $k=3$:
+\begin{align}
+w_1 &= \frac{1}{2 - 2^{1/5}} \approx 1.176451218628365 \\
+w_0 &= 1 - 2w_1 \approx -1.352902437256730
+\end{align}
+
+The composition $S_6(h) = S_4(w_1 h) \circ S_4(w_0 h) \circ S_4(w_1 h)$ requires \textbf{9 leapfrog substeps} (since each $S_4$ uses 3 substeps).
+
+\subsubsection{Eighth-Order: $S_8(h)$}
+
+For $k=4$:
+\begin{align}
+w_1 &= \frac{1}{2 - 2^{1/7}} \approx 1.125968855870793 \\
+w_0 &= 1 - 2w_1 \approx -1.251937711741586
+\end{align}
+
+The composition $S_8(h) = S_6(w_1 h) \circ S_6(w_0 h) \circ S_6(w_1 h)$ requires \textbf{27 leapfrog substeps} (since each $S_6$ uses 9 substeps).
+
+\subsection{Implementation Details}
+
+The recursive composition is implemented by computing all composition weights at initialization, then applying the base leapfrog integrator with scaled timesteps:
+
+\begin{verbatim}
+coefficients = get_yoshida_coefficients(order)
+for each coefficient w in coefficients:
+    (q, p) = leapfrog_step(q, p, w * dt)
+\end{verbatim}
+
+The number of substeps grows as $3^{(k-1)}$ for order $2k$.
+
+\section{Comparison with Runge-Kutta 4}
+
+The classical fourth-order Runge-Kutta (RK4) method is a non-symplectic integrator with the same formal order of accuracy ($\mathcal{O}(h^4)$) as Yoshida order 4. However, RK4 does not preserve the symplectic structure, leading to:
+\begin{itemize}
+    \item \textbf{Systematic energy drift}: For stable systems like the harmonic oscillator, RK4 exhibits a small but systematic energy bias per orbit that accumulates \emph{linearly} in time: $\Delta H \approx C \cdot t$
+    \item \textbf{Phase error accumulation}: Even when energy appears conserved, phase space trajectories drift
+\end{itemize}
+
+In contrast, symplectic integrators like Yoshida methods exhibit \emph{bounded} energy oscillations without secular drift.
+
+\section{Numerical Experiments}
+
+\subsection{Initial Conditions and Parameters}
+
+We integrate the harmonic oscillator with:
+\begin{itemize}
+    \item Initial conditions: $q_0 = 1.0$, $p_0 = 0.0$
+    \item Initial energy: $E_0 = 0.5$
+    \item Timestep: $\Delta t = 0.1$
+    \item Total steps: 10,000 (final time $t_f = 1000$)
+    \item Methods compared: RK4, Yoshida order 4 (Y4), Yoshida order 6 (Y6), Yoshida order 8 (Y8)
+\end{itemize}
+
+\subsection{Energy Error Definition}
+
+The energy error is computed as:
+\begin{equation}
+\Delta H(t) = H(q(t), p(t)) - E_0
+\end{equation}
+
+For the harmonic oscillator, exact energy conservation means $\Delta H(t) = 0$ for all $t$.
+
+\section{Results}
+
+\subsection{Position vs Time}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{position_vs_time.png}
+\caption{Position $q(t)$ versus time for all four integration methods. All methods maintain the periodic oscillation with period $T = 2\pi$.}
+\label{fig:position}
+\end{figure}
+
+% LEAVE SPACE FOR ANALYSIS
+\vspace{2cm}
+\textbf{Analysis:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\subsection{Energy Error vs Time}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{energy_error_vs_time.png}
+\caption{Energy error $\Delta H(t)$ versus time for all four integration methods over 1000 time units ($\sim 159$ orbits).}
+\label{fig:energy_error}
+\end{figure}
+
+% LEAVE SPACE FOR ANALYSIS
+\vspace{2cm}
+\textbf{Analysis:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\subsection{Quantitative Energy Statistics}
+
+Table~\ref{tab:energy_stats} summarizes the energy conservation statistics for each method:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Method} & \textbf{Mean $\Delta H$} & \textbf{Std Dev $\Delta H$} & \textbf{Max $|\Delta H|$} & \textbf{Final $\Delta H$} \\
+\hline
+RK4 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+Yoshida-4 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+Yoshida-6 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+Yoshida-8 & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+\hline
+\end{tabular}
+\caption{Energy conservation statistics over $t \in [0, 1000]$.}
+\label{tab:energy_stats}
+\end{table}
+
+% LEAVE SPACE FOR ANALYSIS
+\vspace{2cm}
+\textbf{Analysis:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\section{Discussion}
+
+\subsection{Symplectic vs Non-Symplectic Integrators}
+
+\vspace{2cm}
+\textbf{Discussion:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\subsection{Order of Accuracy and Computational Cost}
+
+The computational cost scales with the number of force evaluations:
+\begin{itemize}
+    \item RK4: 4 evaluations per timestep
+    \item Yoshida-4: 3 leapfrog substeps $\times$ 2 force evaluations = 6 evaluations
+    \item Yoshida-6: 9 substeps $\times$ 2 = 18 evaluations
+    \item Yoshida-8: 27 substeps $\times$ 2 = 54 evaluations
+\end{itemize}
+
+\vspace{2cm}
+\textbf{Discussion:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\subsection{Practical Considerations}
+
+\vspace{2cm}
+\textbf{Discussion:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\section{Conclusions}
+
+\vspace{3cm}
+\textbf{Conclusions:}
+\begin{itemize}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+    \item[\textbullet] \rule{0.9\textwidth}{0.4pt}
+\end{itemize}
+
+\section*{References}
+
+\begin{itemize}
+    \item H. Yoshida, ``Construction of higher order symplectic integrators,'' \textit{Physics Letters A} \textbf{150}, 262--268 (1990).
+    \item M. Suzuki, ``Fractal decomposition of exponential operators with applications to many-body theories and Monte Carlo simulations,'' \textit{Physics Letters A} \textbf{146}, 319--323 (1990).
+    \item E. Hairer, C. Lubich, and G. Wanner, \textit{Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations}, 2nd ed., Springer (2006).
+\end{itemize}
+
+\end{document}

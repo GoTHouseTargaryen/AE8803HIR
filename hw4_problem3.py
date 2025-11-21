@@ -233,22 +233,17 @@ class IntegrationResult:
 def integrate_yoshida(order: int, q0: float, p0: float, dt: float, steps: int) -> IntegrationResult:
     """Integrate using Yoshida symplectic method.
     
-    The Yoshida composition applies to the symplectic splitting operators.
-    For a separable Hamiltonian H = T(p) + V(q), we use:
-    - Drift operator: exp(h*T) which advances q using p
-    - Kick operator: exp(h*V) which advances p using force(q)
+    The Yoshida composition applies the base second-order leapfrog integrator
+    recursively with weighted timesteps. Each coefficient w_i indicates a 
+    full leapfrog step S(w_i * dt).
     
-    The second-order base method is: Kick(h/2) - Drift(h) - Kick(h/2)
+    For order 2k, we have coefficients [w_0, w_1, ..., w_{n-1}] and apply:
+        S_2k(dt) = S(w_0*dt) · S(w_1*dt) · ... · S(w_{n-1}*dt)
     
-    Higher-order Yoshida methods compose these with weighted timesteps.
-    For symmetric composition with coefficients [w1, w2, ..., wn]:
-    We apply: Drift(w1*dt) - Kick(w2*dt) - ... pattern
-    
-    For odd number of coefficients (symmetric), we use pattern:
-    Kick(w[0]*h/2) - Drift(w[0]*h) - Kick((w[0]+w[1])*h/2) - Drift(w[1]*h) - ...
+    where S(h) is the second-order symmetric leapfrog (velocity-Verlet):
+        Kick(h/2) - Drift(h) - Kick(h/2)
     """
     coeffs = get_yoshida_coefficients(order)
-    n_stages = len(coeffs)
     
     q = np.empty(steps+1)
     p = np.empty(steps+1)
@@ -257,26 +252,9 @@ def integrate_yoshida(order: int, q0: float, p0: float, dt: float, steps: int) -
     for n in range(steps):
         qn, pn = q[n], p[n]
         
-        # Apply Yoshida composition using kick-drift-kick pattern
-        # First half-kick
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[0] * dt)
-        qn, pn = drift_step(qn, pn, coeffs[0] * dt) 
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[0] * dt) 
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[1] * dt)
-        qn, pn = drift_step(qn, pn, coeffs[1] * dt) 
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[1] * dt)
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[2] * dt)
-        qn, pn = drift_step(qn, pn, coeffs[2] * dt) 
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[2] * dt)
-        #print(qn,pn)
-        # Middle stages: full drift, then combined half-kicks
-        '''for i in range(n_stages - 1):
-            
-            qn, pn = kick_step(qn, pn, 0.5 * (coeffs[i] + coeffs[i+1]) * dt)
-        
-        # Final drift and half-kick
-        qn, pn = drift_step(qn, pn, coeffs[-1] * dt)
-        qn, pn = kick_step(qn, pn, 0.5 * coeffs[-1] * dt)'''
+        # Apply each leapfrog substep with scaled timestep
+        for w in coeffs:
+            qn, pn = leapfrog_step(qn, pn, w * dt)
         
         q[n+1], p[n+1] = qn, pn
     
@@ -326,7 +304,7 @@ def print_metrics(label: str, metrics: Dict[str, float]):
 
 # ----------------------------- Plotting ---------------------------------- #
 
-def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True, demo_mode: bool = False, zoom: Dict[str, Tuple[float, float] | None] | None = None):  # pragma: no cover
+def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True, demo_mode: bool = False, zoom: Dict[str, Tuple[float, float] | None] | None = None, log_error: bool = False):  # pragma: no cover
     if not _HAVE_PLOT:
         print("matplotlib not available; skipping plots.")
         return
@@ -395,7 +373,7 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
             # Energy error vs time
             print(dE)
             axs[idx, 1].plot(res.t, dE, color='C3')
-            axs[idx, 1].set_ylabel('Energy Error (ΔH)')
+            axs[idx, 1].set_ylabel('Relative Energy Error (|dE/E0|)')
             axs[idx, 1].set_title(f'{label}: Energy Error vs Time')
             axs[idx, 1].grid(True, alpha=0.3)
             axs[idx, 1].axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
@@ -404,10 +382,10 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
             if zoom and zoom.get('delim') is not None:
                 axs[idx, 1].set_ylim(_pick_lim((-1.0, 1.0), 'delim'))
             else:
-                dE_abs_local = float(np.max(np.abs(dE)))
-                if dE_abs_local == 0.0:
-                    dE_abs_local = 1e-16
-                dE_lim_local = (-dE_abs_local * (1 + pad), dE_abs_local * (1 + pad))
+                dE_max_local = float(np.max(dE))
+                if dE_max_local == 0.0:
+                    dE_max_local = 1e-16
+                dE_lim_local = (0, dE_max_local * (1 + pad))
                 axs[idx, 1].set_ylim(dE_lim_local)
             axs[idx, 1].ticklabel_format(axis='y', style='scientific', scilimits=(-3, 3))
             if idx == n_methods - 1:
@@ -461,20 +439,26 @@ def plot_results(results: Dict[str, IntegrationResult], show_energy: bool = True
         # Plot energy error vs time
         for label, res in results.items():
             E0 = res.energy[0]
-            dE = np.abs(res.energy - E0) / np.abs(E0)
-            ax_error.plot(res.t, np.log10(dE), label=label, alpha=0.8)
+            dE = np.abs(res.energy - E0)/np.abs(E0)
+            if log_error:
+                dE_pos = np.where(dE > 0, dE, 1e-16)  # Avoid log(0)
+                ax_error.semilogy(res.t, dE_pos, label=label, alpha=0.8)
+            else:
+                ax_error.plot(res.t, dE, label=label, alpha=0.8)
         ax_error.set_xlim(t_lim)
-        if zoom and zoom.get('delim') is not None:
+        if not log_error and zoom and zoom.get('delim') is not None:
             ax_error.set_ylim(_pick_lim((0.0, 1.0), 'delim'))
         ax_error.set_xlabel('Time (t)')
-        ax_error.set_ylabel('Energy Error (ΔH)')
+        if log_error:
+            ax_error.set_ylabel('|Energy Error| (|dE/E0|)')
+        else:
+            ax_error.set_ylabel('Relative Energy Error (|dE/E0|)')
+            ax_error.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
+            # Use scientific notation for small error values
+            ax_error.ticklabel_format(axis='y', style='scientific', scilimits=(-3, 3))
         ax_error.set_title('Energy Error vs Time')
         ax_error.legend()
         ax_error.grid(True, alpha=0.3)
-        ax_error.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
-        
-        # Use scientific notation for small error values
-        ax_error.ticklabel_format(axis='y', style='scientific', scilimits=(-3, 3))
         
         # Link time axes (share x across q and ΔH)
         ax_error.sharex(ax_q)
@@ -505,6 +489,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     ap.add_argument('--p0', type=float, default=0.0, help='Initial momentum p(0)')
     ap.add_argument('--plot', action='store_true', help='Generate plots')
     ap.add_argument('--energy', action='store_true', help='Show energy statistics')
+    ap.add_argument('--log-error', action='store_true', help='Plot energy error on log scale (absolute value)')
     ap.add_argument('--demo', action='store_true', help='Run demo comparing all methods')
     ap.add_argument('--show-coefficients', action='store_true', help='Print computed Yoshida coefficients and verify order conditions')
     # Zoom/limit options: pass as "min,max" (comma or colon separated)
@@ -583,7 +568,7 @@ def main(argv: List[str] | None = None):
             for label, res in results.items():
                 print_metrics(label, energy_metrics(res))
         if ns.plot:
-            plot_results(results, show_energy=True, demo_mode=True, zoom=zoom)
+            plot_results(results, show_energy=True, demo_mode=True, zoom=zoom, log_error=ns.log_error)
         else:
             # Print concise summary even without --energy for demo
             for label, res in results.items():
@@ -609,7 +594,7 @@ def main(argv: List[str] | None = None):
     if ns.plot:
         # Use demo_mode if multiple methods specified
         use_demo_mode = len(results) > 1
-        plot_results(results, show_energy=True, demo_mode=use_demo_mode, zoom=zoom)
+        plot_results(results, show_energy=True, demo_mode=use_demo_mode, zoom=zoom, log_error=ns.log_error)
 
 if __name__ == '__main__':  # pragma: no cover
     main()

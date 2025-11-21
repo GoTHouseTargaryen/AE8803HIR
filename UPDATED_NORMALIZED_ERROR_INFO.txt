@@ -1,0 +1,142 @@
+================================================================================
+UPDATED ENERGY ERROR PLOTS - NORMALIZED RELATIVE ERROR
+Generated: November 20, 2025
+================================================================================
+
+## IMPORTANT CHANGE: Energy Error Definition
+
+All plots now use the **normalized relative energy error**:
+
+    dE = |E(t) - E₀| / |E₀|
+
+This is the standard way to report energy conservation in numerical integration:
+- Dimensionless quantity (no units)
+- Shows fractional/percentage error
+- Allows fair comparison between different initial energies
+- Y-axis label: "Relative Energy Error (|dE/E0|)"
+
+## Updated Plot Files
+
+All four result plots have been regenerated (Nov 20, 2025 @ 7:19 PM):
+
+1. **rk4_results.png** (313 KB)
+   - RK4 position and relative energy error
+   - Shows systematic linear drift in relative error
+   
+2. **yoshida4_results.png** (249 KB)
+   - Yoshida-4 position and relative energy error
+   - Shows bounded oscillations
+   
+3. **yoshida6_results.png** (262 KB)
+   - Yoshida-6 position and relative energy error
+   - Much smaller bounded oscillations
+   
+4. **yoshida8_results.png** (289 KB)
+   - Yoshida-8 position and relative energy error
+   - Near machine-precision level conservation
+
+## Updated Statistics (Normalized Relative Error)
+
+### RK4:
+  Mean dE/E0:    6.935443e-05  (~7×10⁻⁵ or 0.007%)
+  Std Dev dE/E0: 4.004488e-05
+  Max |dE/E0|:   1.387057e-04  (~1.4×10⁻⁴ or 0.014%)
+  Final dE/E0:   1.387057e-04
+  RMS dE/E0:     8.008514e-05
+
+### Yoshida-4:
+  Mean dE/E0:    3.830057e-06  (~4×10⁻⁶ or 0.0004%)
+  Std Dev dE/E0: 2.709404e-06
+  Max |dE/E0|:   7.663932e-06  (~8×10⁻⁶ or 0.0008%)
+  Final dE/E0:   5.192712e-06
+  RMS dE/E0:     4.691504e-06
+
+### Yoshida-6:
+  Mean dE/E0:    4.580704e-08  (~5×10⁻⁸ or 0.000005%)
+  Std Dev dE/E0: 3.240397e-08
+  Max |dE/E0|:   9.165944e-08  (~9×10⁻⁸ or 0.000009%)
+  Final dE/E0:   6.267215e-08
+  RMS dE/E0:     5.610973e-08
+
+### Yoshida-8:
+  Mean dE/E0:    3.609961e-11  (~4×10⁻¹¹ or 0.000000004%)
+  Std Dev dE/E0: 2.552973e-11
+  Max |dE/E0|:   7.224488e-11  (~7×10⁻¹¹ or 0.000000007%)
+  Final dE/E0:   4.939782e-11
+  RMS dE/E0:     4.421480e-11
+
+## Key Comparisons (All Relative to Initial Energy)
+
+**RK4 vs Yoshida-4:**
+- Y4 is **18× more accurate** than RK4
+- Y4: 7.7×10⁻⁶ vs RK4: 1.4×10⁻⁴
+
+**Yoshida-4 vs Yoshida-6:**
+- Y6 is **84× more accurate** than Y4
+- Y6: 9.2×10⁻⁸ vs Y4: 7.7×10⁻⁶
+
+**Yoshida-6 vs Yoshida-8:**
+- Y8 is **1,270× more accurate** than Y6
+- Y8: 7.2×10⁻¹¹ vs Y6: 9.2×10⁻⁸
+
+**RK4 vs Yoshida-8:**
+- Y8 is **1.9 million times more accurate** than RK4!
+- Y8 achieves relative errors below 10⁻¹⁰ (machine precision territory)
+
+## What Changed in the Code
+
+### hw4_problem3.py:
+1. Energy error calculation uses: `dE = np.abs(res.energy - E0)/np.abs(E0)`
+2. Demo mode y-axis label: "Relative Energy Error (|dE/E0|)"
+3. Single/multi-method mode y-axis label: "Relative Energy Error (|dE/E0|)"
+4. Y-axis limits adjusted (0 to max, not symmetric around zero since dE is always positive)
+5. Fixed log_error mode to avoid double absolute value
+
+### generate_plots_for_latex.py:
+1. Energy error calculation: `dE = np.abs(res.energy - E0)/np.abs(E0)`
+2. Y-axis label: "Relative Energy Error (|dE/E0|)"
+3. Statistics output shows dE/E0 values consistently
+
+## Interpretation Guide
+
+The relative error `|dE/E0|` tells you:
+- **1×10⁻⁴**: Energy conserved to 0.01% (1 part in 10,000)
+- **1×10⁻⁶**: Energy conserved to 0.0001% (1 part in 1 million)
+- **1×10⁻⁸**: Energy conserved to 0.000001% (1 part in 100 million)
+- **1×10⁻¹¹**: Energy conserved to machine precision (roundoff limited)
+
+## LaTeX Table Values (Updated)
+
+For Table in Section 6.5, use these normalized relative error values:
+
+```latex
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Method} & \textbf{Mean} & \textbf{Std Dev} & \textbf{Max} & \textbf{Final} \\
+\hline
+RK4          & 6.94e-05 & 4.00e-05 & 1.39e-04 & 1.39e-04 \\
+Yoshida-4    & 3.83e-06 & 2.71e-06 & 7.66e-06 & 5.19e-06 \\
+Yoshida-6    & 4.58e-08 & 3.24e-08 & 9.17e-08 & 6.27e-08 \\
+Yoshida-8    & 3.61e-11 & 2.55e-11 & 7.22e-11 & 4.94e-11 \\
+\hline
+\end{tabular}
+```
+
+## Analysis Points for LaTeX Document
+
+1. **Physical Meaning**: Relative error shows energy conservation as a fraction of total energy
+
+2. **RK4 Drift**: Final error equals max error (1.39e-4) - indicates monotonic drift, not oscillation
+
+3. **Yoshida Bounded**: Final ≈ Mean for all Yoshida methods - confirms bounded oscillatory behavior
+
+4. **Order Scaling**: Each step up in order gives ~100× improvement, demonstrating the power of higher-order symplectic methods
+
+5. **Computational Trade-off**: 
+   - Y4: 1.5× cost of RK4 for 18× better conservation
+   - Y6: 4.5× cost of RK4 for 1,900× better conservation  
+   - Y8: 13.5× cost of RK4 for 1.9 million times better conservation
+
+6. **Machine Precision**: Y8 approaches fundamental limits of double-precision floating point (~10⁻¹⁶)
+
+================================================================================
