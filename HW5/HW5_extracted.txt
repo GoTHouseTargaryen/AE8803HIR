@@ -1,0 +1,66 @@
+
+=== Page 1 ===
+Homework Assignment 5
+This homework assignment is for AE 8803 Hamiltonian Mechanics in Space Dynamics (Fall
+2025). The deadline for this assignment is 12/02/2025, 11:59 PM ET. Submit through
+Canvas (1) a summary document that describes your approach and solutions, and (2) a
+developed program. The summary document must be concise and coherent. You may use
+a Latex template through pre-Notes Latex files on Canvas. The developed code must be
+uploaded and should be executable without any setting change (including the necessity of
+creating an executable file, i.e., Fortran, C, C++, etc.) on the instructor’s side. If it
+does not run under this condition, the code is considered non-compliant, leading to zero
+credits without exception. A violation of the submission policy leads to zero credits for the
+designated problem. This assignment does not accept late submission, given that
+the planned deadline is the final date of class. The total score for this assignment
+is 100 points, which will be converted to 15% of the final grade. If you find typos
+or need clarification, please contact the instructors.
+1. This problem uses the 2D circular restricted three-body problem (CRTBP) and the
+3D torque-free rigid body dynamics (TFBRP). Consider a hypothetical scenario that
+your space station is staying at the Earth-Moon L4 point. The space station is also
+tumbling. Using a symplectic integrator based on the 6th-order Yoshida method, your
+task is to investigate how its dynamical motion evolves over the next 25 years. There
+are multiple constraints:
+(a) Code must integrate both orbital and rigid body states in the same loop. In other
+words, do not split it into two separate programs.
+(b) How to formulate the symplectic integrator is up to you, but make sure that
+differential energy, i.e., the absolute difference of the energy at a given time from
+the initial energy, is always less than 10−12, and each component of differential
+angular momentum, i.e., the absolute difference of the angular momentum at a
+given time from the initial angular momentum, is less than 10−8.
+Compile your methodology and results in your Latex-based document. The credit
+policy for the CRTBP is below:
+(a) Methodology (25 pt) – How to formulate the 6th-order Yoshida method for the
+given problem.
+(b) Results (25 pt) – Results from your simulations. Mandated figures include (1)
+the derived 2D spatial trajectory and (2) the time evolution (with units of years)
+of differential energy in semilogy space.
+The credit policy for the TFBRP is below:
+(a) Methodology (25 pt) – How to formulate the 6th-order Yoshida method for the
+given problem.
+(b) Results (25 pt) – Results from your simulations. Mandated figures include the
+time evolution (with units of years) of (1) the derived angular momentum, (2)
+differential energy, and (3) differential angular momentum.
+1
+
+=== Page 2 ===
+The baseline initial state and physical constants are compiled in Table 1. Not all
+quantities are listed here as they do not impact simulation performance significantly.
+Make sure, however, that the space station can stay around the Earth-Moon L4 point
+for 25 years. The instructor confirmed that the initial state within 1,000 km from the
+Lagrange point could make the space station stay for the entire time.
+Table 1: Baseline initial state and physical constants. Assume that the space station is an
+ellipsoid with a dimension of 2 a×2b×2c, and its mass is given as volume times density.
+Notation Number Units
+CRTBP setting
+Earth mass 5 .9722×1024[kg]
+Moon mass 7 .3477×1022[kg]
+Distance between Earth and Moon 384 ,400×103[m]
+TFBRP setting
+Semi-major axis a 10 [m]
+Semi-intermediate axis b 5 [m]
+Semi-minor axis c 4 [m]
+Density ρ 1,000 [kg m−3]
+Initial angular velocity ξcomponent 1 ×10−7[s−1]
+Initial angular velocity ηcomponent 1 ×10−8[s−1]
+Initial angular velocity ζcomponent 1 ×10−5[s−1]
+2

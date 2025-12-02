@@ -87,6 +87,7 @@ dmypy.json
 *.jpg
 *.jpeg
 *.svg
+*.png
 
 # LaTeX auxiliary files (if generating reports)
 *.aux
