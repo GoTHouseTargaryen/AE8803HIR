@@ -1,0 +1,196 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{physics} 
+
+% Define a robust command to include plots or placeholders if missing
+% Fixes previous errors:
+% 1. Uses \detokenize{#1} to safely print filenames with underscores
+% 2. Uses a minipage inside \fbox to allow centering and line breaks
+\newcommand{\includeplot}[3]{
+    \begin{figure}[H]
+        \centering
+        \IfFileExists{#1}{
+            \includegraphics[width=0.8\textwidth]{#1}
+        }{
+            \fbox{
+                \begin{minipage}{0.8\textwidth}
+                    \centering
+                    \vspace{1cm}
+                    Plot file \texttt{\detokenize{#1}} not found.\\
+                    Run \texttt{hw5\_solution.py} to generate.
+                    \vspace{1cm}
+                \end{minipage}
+            }
+        }
+        \caption{#2}
+        \label{#3}
+    \end{figure}
+}
+
+\title{AE 8803 Homework 5\\
+Symplectic Integration of CRTBP and TFRBP}
+\author{Alan Yang}
+\date{December 2, 2025}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+This report details the simulation of a space station at the Earth-Moon L4 Lagrange point over a 25-year duration. The simulation employs a 6th-order Yoshida symplectic integrator to solve two independent dynamical systems:
+\begin{enumerate}
+    \item \textbf{Circular Restricted Three-Body Problem (CRTBP):} Motion of a massless particle in the Earth-Moon gravitational field, formulated in a normalized rotating frame using coordinates $(\xi,\eta)$ with conjugate momenta $(p_{\xi}, p_{\eta})$.
+    \item \textbf{Torque-Free Rigid Body Problem (TFRBP):} Rotation dynamics of a triaxial ellipsoid. The rigid body orientation and inertial angular momentum are tracked using a Direction Cosine Matrix (DCM) and body-frame angular momentum components $(L_{\xi}, L_{\eta}, L_{\zeta})$.
+\end{enumerate}
+
+Throughout this document, dots denote time derivatives, e.g., $\dot{\xi} = d\xi/dt$, $\ddot{\xi} = d^2\xi/dt^2$.
+
+\section{Circular Restricted Three-Body Problem (CRTBP)}
+
+\subsection{Methodology}
+
+\subsubsection{Normalization}
+To ensure numerical stability and simplify the equations of motion, the system is solved in \textbf{Normalized Units} in the rotating frame. 
+
+\textbf{Definitions:}
+\begin{itemize}
+    \item \textbf{Length Unit (LU):} The distance between the primaries.
+    \begin{equation}
+        LU = R_{EM} = 384,400 \text{ km}
+    \end{equation}
+    \item \textbf{Mass Unit (MU):} The sum of the primary masses.
+    \begin{equation}
+        MU = M_{Earth} + M_{Moon}
+    \end{equation}
+    \item \textbf{Time Unit (TU):} Defined such that the mean motion (angular velocity) of the primaries is unity ($n=1$).
+    \begin{equation}
+        n = \sqrt{\frac{G(M_E + M_M)}{R_{EM}^3}}, \quad TU = \frac{1}{n}
+    \end{equation}
+\end{itemize}
+
+In this system, the gravitational parameter is $G(M_E+M_M) = 1$, the primary separation is $R=1$, the frame angular velocity is $\Omega = 1$, and the orbital period is $2\pi$.
+
+\subsubsection{Hamiltonian Derivation}
+We follow the Lecture 22 splitting for CRTBP. The Lagrangian in the rotating frame using $(\xi,\eta)$ is:
+\begin{equation}
+    L = \frac{1}{2}(\dot{\xi}^2 + \dot{\eta}^2) + (\xi\dot{\eta} - \eta\dot{\xi}) - V(\xi,\eta)
+\end{equation}
+where $V(\xi,\eta) = -\frac{1-\mu}{r_1} - \frac{\mu}{r_2}$ is the gravitational potential, with distances $r_1 = \sqrt{(\xi - \xi_1)^2 + \eta^2}$, $r_2 = \sqrt{(\xi - \xi_2)^2 + \eta^2}$, and primary locations $\xi_1 = -\mu$, $\xi_2 = 1-\mu$.
+The canonical momenta are derived via the Legendre transform:
+\begin{equation}
+    p_{\xi} = \frac{\partial L}{\partial \dot{\xi}} = \dot{\xi} - \eta, \quad p_{\eta} = \frac{\partial L}{\partial \dot{\eta}} = \dot{\eta} + \xi
+\end{equation}
+The Hamiltonian $H = \mathbf{p}\cdot\dot{\mathbf{q}} - L$ becomes:
+\begin{equation}
+    H = \frac{1}{2}(p_{\xi}^2 + p_{\eta}^2) + (\eta\, p_{\xi} - \xi\, p_{\eta}) + V(\xi,\eta)
+\end{equation}
+\paragraph{Canonical velocity.}
+From the momentum definition, the physical velocity in the rotating frame is $\dot{\mathbf{q}} = \mathbf{p} + (\eta,-\xi)$, so initializing $\dot{\mathbf{q}}=0$ at L4 requires $\mathbf{p}_0 = (-\eta_0,\xi_0)$.
+
+\subsubsection{Symplectic Splitting}
+We split $H$ into three separable parts to facilitate explicit integration:
+\begin{enumerate}
+    \item \textbf{Kinetic (Drift):} $H_K = \frac{1}{2}(p_{\xi}^2 + p_{\eta}^2)$.
+    \item \textbf{Potential (Kick):} $H_P = V(\xi,\eta) = -\frac{1-\mu}{r_1} - \frac{\mu}{r_2}$.
+    \item \textbf{Coriolis (Rotation):} $H_C = \eta\, p_{\xi} - \xi\, p_{\eta}$.
+\end{enumerate}
+Each part has an exact analytical solution:
+\begin{itemize}
+    \item $H_K$ generates a linear drift in position.
+    \item $H_P$ generates a linear kick in momentum: $\mathbf{p}_{\text{new}} = \mathbf{p} - \nabla V(\mathbf{q})\,\tau$.
+    \item $H_C$ generates a pure geometric rotation in phase space for both coordinates and momenta:
+    \begin{equation}
+        \begin{pmatrix} \xi \\ \eta \end{pmatrix}_{\text{new}} = \begin{pmatrix} \cos \tau & \sin \tau \\ -\sin \tau & \cos \tau \end{pmatrix} \begin{pmatrix} \xi \\ \eta \end{pmatrix},\quad
+        \begin{pmatrix} p_{\xi} \\ p_{\eta} \end{pmatrix}_{\text{new}} = \begin{pmatrix} \cos \tau & \sin \tau \\ -\sin \tau & \cos \tau \end{pmatrix} \begin{pmatrix} p_{\xi} \\ p_{\eta} \end{pmatrix}
+    \end{equation}
+
+\end{itemize}
+
+\subsubsection{L4 Initialization and Canonical Momentum}
+The L4 point in normalized coordinates is $(\xi_0, \eta_0) = (\tfrac{1}{2} - \mu, \tfrac{\sqrt{3}}{2})$. To initialize with zero velocity in the rotating frame ($\dot{\xi}=\dot{\eta}=0$), we use the canonical momentum relation $\mathbf{p} = \mathbf{v} + \mathbf{A}$, where $\mathbf{A} = (-\eta, \xi)$. Thus $p_{\xi,0} = -\eta_0$, $p_{\eta,0} = \xi_0$.
+
+\subsubsection{6th-Order Yoshida Composition}
+We construct a symmetric second-order step for CRTBP:
+\begin{equation}
+    S_2(\tau) = \text{Rot}(\tfrac{\tau}{2}) \circ \text{Kick}(\tfrac{\tau}{2}) \circ \text{Drift}(\tau) \circ \text{Kick}(\tfrac{\tau}{2}) \circ \text{Rot}(\tfrac{\tau}{2})
+\end{equation}
+This is composed to 6th-order using Yoshida coefficients:
+\begin{equation}
+    w_1=\frac{1}{2-2^{1/5}} \approx 1.3512, \quad w_0=1-2w_1 \approx -1.7024
+\end{equation}
+\begin{equation}
+    S_6(\tau) = S_2(w_1\tau) \circ S_2(w_0\tau) \circ S_2(w_1\tau)
+\end{equation}
+
+\subsection{Results}
+
+\subsubsection{2D Spatial Trajectory}
+\includeplot{hw5_crtbp_traj.png}{CRTBP: 2D Spatial Trajectory $(\xi,\eta)$ of the station at L4 over 25 years.}{fig:crtbp_traj}
+
+\subsubsection{Time Evolution of Differential Energy}
+\includeplot{hw5_crtbp_energy.png}{CRTBP: Time evolution of Differential Energy ($|E(t) - E_0|$) over 25 years in semilogy space. Maximum error targeted is $< 10^{-12}$.}{fig:crtbp_energy}
+
+\section{Torque-Free Rigid Body Problem (TFRBP)}
+
+\subsection{Methodology}
+
+\subsubsection{Kinematic/Dynamic Splitting (Lecture 24)}
+We model the torque-free rigid body with principal moments $\mathbf{I}=\operatorname{diag}(I_{\xi},I_{\eta},I_{\zeta})$, body angular momentum $\mathbf{L}=(L_{\xi},L_{\eta},L_{\zeta})$, and body angular velocity $\boldsymbol{\omega}=\mathbf{I}^{-1}\mathbf{L}$. The kinetic energy Hamiltonian is
+\begin{equation}
+    H_{rb}(\mathbf{L}) = \tfrac{1}{2}\left( \tfrac{L_{\xi}^2}{I_{\xi}} + \tfrac{L_{\eta}^2}{I_{\eta}} + \tfrac{L_{\zeta}^2}{I_{\zeta}} \right).
+\end{equation}
+We employ a two-way splitting:
+\begin{align}
+    &\textbf{Kinematic step } (H_1'): && \dot{R} = R\,[\boldsymbol{\omega}]_\times, \quad \dot{\mathbf{L}} = \mathbf{0}, \\
+    &\textbf{Dynamic step } (H_2'): && \dot{R} = 0, \quad \dot{\mathbf{L}} = \mathbf{L} \times \boldsymbol{\omega}, \quad \boldsymbol{\omega}=\mathbf{I}^{-1}\mathbf{L},
+\end{align}
+where $R$ is the body-to-inertial DCM and $[\cdot]_\times$ is the skew-symmetric matrix. The kinematic flow has the closed-form solution (Rodrigues' formula):
+\begin{equation}
+    R_{\text{new}} = R\,\exp\big( [\boldsymbol{\omega}]_\times \, \tau \big), \quad \text{with } \boldsymbol{\omega} \text{ constant over } \tau.
+\end{equation}
+
+\subsubsection{Exact Dynamic Sub-Flows via Axis Hamiltonians}
+The dynamic step is integrated exactly by further splitting $H_2'$ into the axis Hamiltonians
+\begin{equation}
+    H_{\xi}(L_{\xi})=\frac{L_{\xi}^2}{2I_{\xi}},\quad H_{\eta}(L_{\eta})=\frac{L_{\eta}^2}{2I_{\eta}},\quad H_{\zeta}(L_{\zeta})=\frac{L_{\zeta}^2}{2I_{\zeta}}.
+\end{equation}
+Using the rigid-body Lie--Poisson brackets $\{L_i,L_j\}=\varepsilon_{ijk}L_k$, the flow of $H_{\xi}$ is
+\begin{equation}
+    \dot{L}_{\eta}=\{L_{\eta},H_{\xi}\}=\frac{L_{\xi}}{I_{\xi}}\,L_{\zeta}=\omega_{\xi}L_{\zeta},\qquad 
+    \dot{L}_{\zeta}=\{L_{\zeta},H_{\xi}\}=-\frac{L_{\xi}}{I_{\xi}}\,L_{\eta}=-\omega_{\xi}L_{\eta},
+\end{equation}
+which is a planar rotation of $(L_{\eta},L_{\zeta})$ by angle $\theta=\omega_{\xi}\,\tau$ with $\omega_{\xi}=L_{\xi}/I_{\xi}$, while $L_{\xi}$ remains constant. Analogous expressions hold for $H_{\eta}$ and $H_{\zeta}$. This preserves both kinetic energy and the Casimir $\lVert\mathbf{L}\rVert^2$.
+
+\subsubsection{Second-Order Symmetric Step and 6th-Order Yoshida Composition}
+The symmetric second-order step used in the code is
+\begin{equation}
+    S_2(\tau) = \underbrace{\text{Kin}(\tfrac{\tau}{2})}_{H_1'} \circ \underbrace{\text{Dyn}_{\xi}(\tfrac{\tau}{2})\, \text{Dyn}_{\eta}(\tfrac{\tau}{2})\, \text{Dyn}_{\zeta}(\tau)\, \text{Dyn}_{\eta}(\tfrac{\tau}{2})\, \text{Dyn}_{\xi}(\tfrac{\tau}{2})}_{H_2'} \circ \underbrace{\text{Kin}(\tfrac{\tau}{2})}_{H_1'}.
+\end{equation}
+This is composed to 6th-order using the same Yoshida coefficients as CRTBP:
+\begin{equation}
+    w_1=\frac{1}{2-2^{1/5}} \approx 1.3512, \quad w_0=1-2w_1 \approx -1.7024
+\end{equation}
+\begin{equation}
+    S_6(\tau) = S_2(w_1\tau) \circ S_2(w_0\tau) \circ S_2(w_1\tau)
+\end{equation}
+
+\subsection{Results}
+
+\subsubsection{Time Evolution of Derived Angular Momentum (Inertial Frame)}
+\includeplot{hw5_tfbrp_L.png}{TFBRP: Time evolution of Derived Angular Momentum $(L_{\xi}, L_{\eta}, L_{\zeta})$ in the Inertial Frame over 25 years. Components remain nearly constant.}{fig:tfbrp_L}
+
+\subsubsection{Time Evolution of Differential Energy}
+\includeplot{hw5_tfbrp_E.png}{TFBRP: Time evolution of Differential Energy over 25 years.}{fig:tfbrp_E}
+
+\subsubsection{Time Evolution of Differential Angular Momentum (Inertial Frame)}
+\includeplot{hw5_tfbrp_dL.png}{TFBRP: Time evolution of Differential Angular Momentum ($|\mathbf{L}(t) - \mathbf{L}_0|$) in the Inertial Frame over 25 years. Maximum error targeted is $< 10^{-8}$.}{fig:tfbrp_dL}
+
+
+
+\end{document}
