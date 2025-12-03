@@ -37,3 +37,9 @@ if (Test-Path "requirements.txt") {
 
 Write-Host "Bootstrap complete!" -ForegroundColor Green
 Write-Host "Virtual environment is activated and ready to use." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "To run the simulation:" -ForegroundColor Yellow
+Write-Host "  python hw5_simulation.py" -ForegroundColor White
+Write-Host ""
+Write-Host "To deactivate the virtual environment:" -ForegroundColor Yellow
+Write-Host "  deactivate" -ForegroundColor White

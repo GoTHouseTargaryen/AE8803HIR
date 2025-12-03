@@ -116,17 +116,51 @@ Each part has an exact analytical solution:
 The L4 point in normalized coordinates is $(\xi_0, \eta_0) = (\tfrac{1}{2} - \mu, \tfrac{\sqrt{3}}{2})$. To initialize with zero velocity in the rotating frame ($\dot{\xi}=\dot{\eta}=0$), we use the canonical momentum relation $\mathbf{p} = \mathbf{v} + \mathbf{A}$, where $\mathbf{A} = (-\eta, \xi)$. Thus $p_{\xi,0} = -\eta_0$, $p_{\eta,0} = \xi_0$.
 
 \subsubsection{6th-Order Yoshida Composition}
-We construct a symmetric second-order step for CRTBP:
+We start from a symmetric second-order step for CRTBP:
 \begin{equation}
-    S_2(\tau) = \text{Rot}(\tfrac{\tau}{2}) \circ \text{Kick}(\tfrac{\tau}{2}) \circ \text{Drift}(\tau) \circ \text{Kick}(\tfrac{\tau}{2}) \circ \text{Rot}(\tfrac{\tau}{2})
+        S_2(\tau) = \text{Rot}(\tfrac{\tau}{2}) \circ \text{Kick}(\tfrac{\tau}{2}) \circ \text{Drift}(\tau) \circ \text{Kick}(\tfrac{\tau}{2}) \circ \text{Rot}(\tfrac{\tau}{2}).
 \end{equation}
-This is composed to 6th-order using Yoshida coefficients:
+
+\paragraph{From $S_2$ to $S_4$ via symmetric triple.}
+Compose
 \begin{equation}
-    w_1=\frac{1}{2-2^{1/5}} \approx 1.3512, \quad w_0=1-2w_1 \approx -1.7024
+    S_4(\tau) = S_2(a\,\tau) \circ S_2(b\,\tau) \circ S_2(a\,\tau), \qquad 2a+b=1.
 \end{equation}
+By BCH, the leading $\mathcal{O}(\tau^3)$ defect in the composition scales as $2a^3+b^3$. Enforce
 \begin{equation}
-    S_6(\tau) = S_2(w_1\tau) \circ S_2(w_0\tau) \circ S_2(w_1\tau)
+    2a+b=1, \qquad 2a^3+b^3=0
 \end{equation}
+to obtain Yoshida's 4th-order coefficients
+\begin{equation}
+    a = \frac{1}{2-2^{1/3}}, \qquad b = 1 - 2a \approx -1.7024143839.
+\end{equation}
+
+\paragraph{From $S_4$ to $S_6$ via symmetric triple.}
+Compose
+\begin{equation}
+    S_6(\tau) = S_4(\alpha\,\tau) \circ S_4(\beta\,\tau) \circ S_4(\alpha\,\tau), \qquad 2\alpha+\beta=1.
+\end{equation}
+The leading $\mathcal{O}(\tau^5)$ defect of $S_4$ cancels if
+\begin{equation}
+    2\alpha^5 + \beta^5 = 0.
+\end{equation}
+Solving yields
+\begin{equation}
+    \alpha = \frac{1}{2-2^{1/5}}, \qquad \beta = 1 - 2\alpha \approx -1.7024143839.
+\end{equation}
+Equivalently, collapsing onto $S_2$ directly gives the three-stage form
+\begin{equation}
+    S_6(\tau) = S_2(w_1\,\tau) \circ S_2(w_0\,\tau) \circ S_2(w_1\,\tau),
+\end{equation}
+with moment conditions
+\begin{equation}
+    2w_1 + w_0 = 1, \quad 2w_1^3 + w_0^3 = 0, \quad 2w_1^5 + w_0^5 = 0,
+\end{equation}
+whose solution is
+\begin{equation}
+    w_1 = \frac{1}{2-2^{1/5}} \approx 1.3512, \qquad w_0 = 1 - 2w_1 \approx -1.7024.
+\end{equation}
+These constructions upgrade $S_2\to S_4\to S_6$ while preserving symmetry and symplecticity.
 
 \subsection{Results}
 
@@ -150,7 +184,7 @@ We employ a two-way splitting:
     &\textbf{Kinematic step } (H_1'): && \dot{R} = R\,[\boldsymbol{\omega}]_\times, \quad \dot{\mathbf{L}} = \mathbf{0}, \\
     &\textbf{Dynamic step } (H_2'): && \dot{R} = 0, \quad \dot{\mathbf{L}} = \mathbf{L} \times \boldsymbol{\omega}, \quad \boldsymbol{\omega}=\mathbf{I}^{-1}\mathbf{L},
 \end{align}
-where $R$ is the body-to-inertial DCM and $[\cdot]_\times$ is the skew-symmetric matrix. The kinematic flow has the closed-form solution (Rodrigues' formula):
+where $R$ is the body-to-inertial DCM and $[\cdot]_\times$ is the skew-symmetric matrix. The kinematic flow has the closed-form solution:
 \begin{equation}
     R_{\text{new}} = R\,\exp\big( [\boldsymbol{\omega}]_\times \, \tau \big), \quad \text{with } \boldsymbol{\omega} \text{ constant over } \tau.
 \end{equation}
@@ -165,19 +199,32 @@ Using the rigid-body Lie--Poisson brackets $\{L_i,L_j\}=\varepsilon_{ijk}L_k$, t
     \dot{L}_{\eta}=\{L_{\eta},H_{\xi}\}=\frac{L_{\xi}}{I_{\xi}}\,L_{\zeta}=\omega_{\xi}L_{\zeta},\qquad 
     \dot{L}_{\zeta}=\{L_{\zeta},H_{\xi}\}=-\frac{L_{\xi}}{I_{\xi}}\,L_{\eta}=-\omega_{\xi}L_{\eta},
 \end{equation}
-which is a planar rotation of $(L_{\eta},L_{\zeta})$ by angle $\theta=\omega_{\xi}\,\tau$ with $\omega_{\xi}=L_{\xi}/I_{\xi}$, while $L_{\xi}$ remains constant. Analogous expressions hold for $H_{\eta}$ and $H_{\zeta}$. This preserves both kinetic energy and the Casimir $\lVert\mathbf{L}\rVert^2$.
+which is a planar rotation of $(L_{\eta},L_{\zeta})$ by angle $\theta=\omega_{\xi}\,\tau$ with $\omega_{\xi}=L_{\xi}/I_{\xi}$, while $L_{\xi}$ remains constant. Analogous expressions hold for $H_{\eta}$ and $H_{\zeta}$. This preserves both kinetic energy and $\lVert\mathbf{L}\rVert^2$.
 
-\subsubsection{Second-Order Symmetric Step and 6th-Order Yoshida Composition}
-The symmetric second-order step used in the code is
+\subsubsection{Second-Order Symmetric Step and Yoshida Recursion}
+The second-order step used in the code is
 \begin{equation}
-    S_2(\tau) = \underbrace{\text{Kin}(\tfrac{\tau}{2})}_{H_1'} \circ \underbrace{\text{Dyn}_{\xi}(\tfrac{\tau}{2})\, \text{Dyn}_{\eta}(\tfrac{\tau}{2})\, \text{Dyn}_{\zeta}(\tau)\, \text{Dyn}_{\eta}(\tfrac{\tau}{2})\, \text{Dyn}_{\xi}(\tfrac{\tau}{2})}_{H_2'} \circ \underbrace{\text{Kin}(\tfrac{\tau}{2})}_{H_1'}.
+        S_2(\tau) = \underbrace{\text{Kin}(\tfrac{\tau}{2})}_{H_1'} \circ \underbrace{\text{Dyn}_{\xi}(\tfrac{\tau}{2})\, \text{Dyn}_{\eta}(\tfrac{\tau}{2})\, \text{Dyn}_{\zeta}(\tau)\, \text{Dyn}_{\eta}(\tfrac{\tau}{2})\, \text{Dyn}_{\xi}(\tfrac{\tau}{2})}_{H_2'} \circ \underbrace{\text{Kin}(\tfrac{\tau}{2})}_{H_1'}.
 \end{equation}
-This is composed to 6th-order using the same Yoshida coefficients as CRTBP:
+We raise its order via Yoshida's splitting method.
+
+\paragraph{$S_2\to S_4$ (triple).}
 \begin{equation}
-    w_1=\frac{1}{2-2^{1/5}} \approx 1.3512, \quad w_0=1-2w_1 \approx -1.7024
+    S_4(\tau) = S_2(a\,\tau) \circ S_2(b\,\tau) \circ S_2(a\,\tau), \quad 2a+b=1, \quad 2a^3+b^3=0,
 \end{equation}
+giving $a=1/(2-2^{1/3})$, $b=1-2a$.
+
+\paragraph{$S_4\to S_6$ (triple).}
 \begin{equation}
-    S_6(\tau) = S_2(w_1\tau) \circ S_2(w_0\tau) \circ S_2(w_1\tau)
+    S_6(\tau) = S_4(\alpha\,\tau) \circ S_4(\beta\,\tau) \circ S_4(\alpha\,\tau), \quad 2\alpha+\beta=1, \quad 2\alpha^5+\beta^5=0,
+\end{equation}
+yielding $\alpha=1/(2-2^{1/5})$, $\beta=1-2\alpha$. Equivalently, the collapsed $S_2$-based three-stage form
+\begin{equation}
+    S_6(\tau) = S_2(w_1\,\tau) \circ S_2(w_0\,\tau) \circ S_2(w_1\,\tau),
+\end{equation}
+with $2w_1+w_0=1$, $2w_1^3+w_0^3=0$, $2w_1^5+w_0^5=0$, gives
+\begin{equation}
+    w_1=\frac{1}{2-2^{1/5}} \approx 1.3512, \qquad w_0=1-2w_1 \approx -1.7024.
 \end{equation}
 
 \subsection{Results}
@@ -191,6 +238,14 @@ This is composed to 6th-order using the same Yoshida coefficients as CRTBP:
 \subsubsection{Time Evolution of Differential Angular Momentum (Inertial Frame)}
 \includeplot{hw5_tfbrp_dL.png}{TFBRP: Time evolution of Differential Angular Momentum ($|\mathbf{L}(t) - \mathbf{L}_0|$) in the Inertial Frame over 25 years. Maximum error targeted is $< 10^{-8}$.}{fig:tfbrp_dL}
 
-
+\section{Discussion}
+I've also attached my 4th order run of the simulation. \
+Prior to recursively solving for the 6th order coefficients, I outputted hw5\_compare\_4th.pdf\
+which gave me good looking CRTBP solutions and TFRBP solutions but the TFRBP solutions were not meeting the constraints. \
+When switching to the recursively solved ones as shown in the results of this document, there seems to be some weird implementation \
+that is causing instability in the angular momentum and energy although the energy is going more towards 0 which is oddly positive \
+while the angular momentum is slowly blowing up. I believe this might either be caused by an implementation error in the Yoshida \
+coefficients or in the dynamic step of the TFRBP solver. If you want to see the 4th order results, please refer to the attached \
+hw5\_compare\_4th.pdf and you can also choose to run the hw5\_simulation\_4.py code.
 
 \end{document}

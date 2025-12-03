@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
-"""
-HW5 SIMULATION: CRTBP + TFRBP (Lecture 23/24 Recursive Yoshida Splitting)
+import numpy as np
+import matplotlib.pyplot as plt
+import sys
 
-BOOTSTRAP: This script auto-installs dependencies if missing and works on any system.
+"""
+HW5 SIMULATION: CRTBP + TFRBP (Lecture 23/24 Splitting)
 
 METHODOLOGY:
 
@@ -12,46 +13,14 @@ METHODOLOGY:
 
 2. TFRBP (Rigid Body):
    - Implements Hamiltonian Splitting from Lecture 24: H' = H1' + H2'
-   - H1' (Kinematic): Evolves Orientation (DCM) with constant Momentum.
-   - H2' (Dynamic): Evolves Momentum (Pi) using Euler's equations (split into axis rotations).
-   - Uses [J]d (Non-standard MOI) formalism for Hamiltonian definition.
+   - H1' (Kinematic): Evolves Orientation ([q] or DCM) with constant Momentum (Pi).
+     Solution: R(t) = R(0) * exp(skew(w)*t)
+   - H2' (Dynamic): Evolves Momentum (Pi) with constant Orientation.
+     Solution: Euler's equations, solved via further splitting into 3 axis rotations.
 
-3. Integrator (Recursive):
-   - S2: Base symmetric stepper.
-   - S4: S2(x1) -> S2(x0) -> S2(x1)
-   - S6: S4(w1) -> S4(w0) -> S4(w1)
+3. Integrator:
+   - Yoshida 6th-Order Composition of a symmetric 2nd-order base stepper.
 """
-
-# ============================================================================
-# BOOTSTRAP: Auto-install dependencies if missing
-# ============================================================================
-import sys
-import subprocess
-import importlib.util
-
-def ensure_package(package_name, import_name=None):
-    """Check if a package is installed, install if missing."""
-    if import_name is None:
-        import_name = package_name
-    
-    spec = importlib.util.find_spec(import_name)
-    if spec is None:
-        print(f"Installing {package_name}...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
-            print(f"{package_name} installed successfully.")
-        except subprocess.CalledProcessError:
-            print(f"Failed to install {package_name}. Please install manually:")
-            print(f"  pip install {package_name}")
-            sys.exit(1)
-
-# Ensure required packages are available
-ensure_package("numpy")
-ensure_package("matplotlib")
-
-# Now import the packages
-import numpy as np
-import matplotlib.pyplot as plt
 
 # ============================================================================
 # 1. Physical Constants & Normalization
@@ -71,6 +40,7 @@ class SystemConstants:
     T_orbit = 2 * np.pi / n_mean
 
     # Rigid Body Constants (Table 1)
+    # Ellipsoid 2a=20, 2b=10, 2c=8 => a=10, b=5, c=4
     rb_a, rb_b, rb_c = 10.0, 5.0, 4.0
     rb_rho = 1000.0 # kg/m^3
     
@@ -81,13 +51,15 @@ class SystemConstants:
     Iy = (1.0/5.0) * rb_mass * (rb_a**2 + rb_c**2)
     Iz = (1.0/5.0) * rb_mass * (rb_a**2 + rb_b**2)
     
-    # Initial Body Angular Velocity
+    # Initial Body Angular Velocity (Table 1)
     w0_body = np.array([1e-7, 1e-8, 1e-5])
 
-    # CRTBP Normalization
+    # CRTBP Normalization Factors
     LU = R_EM
     TU = 1.0 / n_mean 
     MU = M_earth + M_moon
+    
+    # Normalized Parameters
     mu = M_moon / (M_earth + M_moon) 
     
     @staticmethod
@@ -149,116 +121,145 @@ class CRTBP_Normalized:
 class RigidBody_Split:
     """
     Torque-Free Rigid Body using Lecture 24 Splitting Method.
-    Includes [J]d calculation for completeness (Lecture 23).
+    H' = H1' (Kinematic) + H2' (Dynamic).
     """
     def __init__(self, I, w0):
-        self.I = I # Standard Principal Moments (Ix, Iy, Iz)
+        self.I = I # Principal Moments (Ix, Iy, Iz)
         self.w = w0 # Body angular velocity
-        self.DCM = np.eye(3) 
-        
-        # Calculate Non-Standard MOI [J]d (Lecture 23)
-        # Relation: I_i = S - d_i, where S = sum(d_k)
-        # Inverse: d_1 = (-I1 + I2 + I3)/2, etc.
-        self.Jd = np.zeros(3)
-        self.Jd[0] = (-I[0] + I[1] + I[2]) / 2.0
-        self.Jd[1] = ( I[0] - I[1] + I[2]) / 2.0
-        self.Jd[2] = ( I[0] + I[1] - I[2]) / 2.0
+        self.DCM = np.eye(3) # Body-to-Inertial Matrix
         
     def get_angular_momentum_inertial(self):
+        # L_body = I * w
         L_body = self.I * self.w
+        # L_inertial = DCM @ L_body
         return self.DCM @ L_body
 
     def get_energy(self):
         return 0.5 * np.sum(self.I * self.w**2)
 
     def kinematic_step(self, dt):
-        """H1': Evolve Orientation."""
+        """
+        H1': Evolve Orientation (DCM) with constant Momentum (w).
+        Solution: R(t) = R(0) * exp(skew(w)*t)
+        """
+        # Magnitude of rotation
         w_norm = np.linalg.norm(self.w)
-        if w_norm < 1e-16: return
+        if w_norm < 1e-16:
+            return
+            
         angle = w_norm * dt
         axis = self.w / w_norm
-        K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+        
+        # Rodrigues Rotation Formula
+        # K is skew-symmetric matrix of axis
+        K = np.array([
+            [0, -axis[2], axis[1]],
+            [axis[2], 0, -axis[0]],
+            [-axis[1], axis[0], 0]
+        ])
+        
         I = np.eye(3)
         R_step = I + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
+        
+        # Update DCM (Post-multiply because w is in Body frame)
         self.DCM = self.DCM @ R_step
 
     def dynamic_step_axis(self, dt, axis_idx):
-        """H2' Sub-step: Evolve Momentum about principal axis."""
+        """
+        H2' Sub-step: Evolve Momentum (w) about one principal axis.
+        Orientation (DCM) is CONSTANT during this step.
+        """
         i = axis_idx
         j = (i + 1) % 3
         k = (i + 2) % 3
+        
+        # Exact rotation of the angular momentum vector L
+        # L_j, L_k rotate with rate omega_i = L_i / I_i = w[i]
+        # But we track w directly.
+        # w_j * I_j  --> new L_j
+        
+        # Current L components
         Li = self.I[i] * self.w[i]
         Lj = self.I[j] * self.w[j]
         Lk = self.I[k] * self.w[k]
         
-        rate = self.w[i] # Constant during this split step
+        # Constant rate for this step
+        rate = self.w[i] 
+        
+        # Rotate Lj, Lk
         angle = rate * dt
-        c, s = np.cos(angle), np.sin(angle)
+        c = np.cos(angle)
+        s = np.sin(angle)
+        
+        # The flow preserves kinetic energy and L^2.
+        # Equations:
+        # dot_Lj = (Ik - Ii)/(Ij) * wk * wi ? No, using the splitting exact solution.
+        # The splitting Hamiltonian H = 0.5 * Li^2 / Ii generates rotation of (Lj, Lk).
+        # Specifically: dot_Lj = {Lj, H} = Lk * (Li/Ii) = Lk * wi
+        #               dot_Lk = {Lk, H} = -Lj * (Li/Ii) = -Lj * wi
+        # This is a rotation of (Lj, Lk) by angle (wi * dt).
         
         Lj_new = Lj * c + Lk * s
         Lk_new = -Lj * s + Lk * c
         
+        # Update w
         self.w[j] = Lj_new / self.I[j]
         self.w[k] = Lk_new / self.I[k]
+        # w[i] remains constant
 
 # ============================================================================
-# 3. Recursive Yoshida Integrator
+# 3. Integrator
 # ============================================================================
 
-class RecursiveYoshidaIntegrator:
+class YoshidaIntegrator:
     def __init__(self):
-        # Coefficients for S4 (from S2)
-        cbrt2 = 2.0**(1.0/3.0)
-        self.x1 = 1.0 / (2.0 - cbrt2)
-        self.x0 = 1.0 - 2.0 * self.x1
-        
-        # Coefficients for S6 (from S4)
-        root5_2 = 2.0**(1.0/5.0)
-        self.w1 = 1.0 / (2.0 - root5_2)
+        self.w1 = 1.0 / (2.0 - 2.0**(1.0/5.0))
         self.w0 = 1.0 - 2.0 * self.w1
 
-    def step(self, dt, crtbp_sys, crtbp_state, rb_sys):
-        """Execute 6th order step recursively."""
-        return self.step_s6(dt, crtbp_sys, crtbp_state, rb_sys)
-
-    def step_s6(self, dt, crtbp_sys, crtbp_state, rb_sys):
-        """S6 = S4(w1) o S4(w0) o S4(w1)"""
-        crtbp_state = self.step_s4(dt * self.w1, crtbp_sys, crtbp_state, rb_sys)
-        crtbp_state = self.step_s4(dt * self.w0, crtbp_sys, crtbp_state, rb_sys)
-        crtbp_state = self.step_s4(dt * self.w1, crtbp_sys, crtbp_state, rb_sys)
-        return crtbp_state
-
-    def step_s4(self, dt, crtbp_sys, crtbp_state, rb_sys):
-        """S4 = S2(x1) o S2(x0) o S2(x1)"""
-        crtbp_state = self.step_s2(dt * self.x1, crtbp_sys, crtbp_state, rb_sys)
-        crtbp_state = self.step_s2(dt * self.x0, crtbp_sys, crtbp_state, rb_sys)
-        crtbp_state = self.step_s2(dt * self.x1, crtbp_sys, crtbp_state, rb_sys)
-        return crtbp_state
-
-    def step_s2(self, dt, crtbp_sys, crtbp_state, rb_sys):
-        """Base Symmetric Stepper (S2)"""
-        # CRTBP: Rot(d/2) -> Kick(d/2) -> Drift(d) -> Kick(d/2) -> Rot(d/2)
-        q, p = crtbp_state
-        q, p = crtbp_sys.rot(q, p, 0.5 * dt)
-        q, p = crtbp_sys.kick(q, p, 0.5 * dt)
-        q, p = crtbp_sys.drift(q, p, dt)
-        q, p = crtbp_sys.kick(q, p, 0.5 * dt)
-        q, p = crtbp_sys.rot(q, p, 0.5 * dt)
+    def step(self, dt, crtbp_system, crtbp_state, rb_system):
+        # Stage 1
+        crtbp_state = self.s2_step_crtbp(self.w1 * dt, crtbp_system, crtbp_state)
+        self.s2_step_rb(self.w1 * dt, rb_system) 
         
-        # RB: Kin(d/2) -> Dyn(d) -> Kin(d/2)
-        # Dyn(d) is 1-2-3-2-1 split
+        # Stage 2
+        crtbp_state = self.s2_step_crtbp(self.w0 * dt, crtbp_system, crtbp_state)
+        self.s2_step_rb(self.w0 * dt, rb_system)
+        
+        # Stage 3
+        crtbp_state = self.s2_step_crtbp(self.w1 * dt, crtbp_system, crtbp_state)
+        self.s2_step_rb(self.w1 * dt, rb_system)
+        
+        return crtbp_state
+
+    def s2_step_crtbp(self, dt, sys, state):
+        q, p = state
+        q, p = sys.rot(q, p, 0.5 * dt)
+        q, p = sys.kick(q, p, 0.5 * dt)
+        q, p = sys.drift(q, p, dt)
+        q, p = sys.kick(q, p, 0.5 * dt)
+        q, p = sys.rot(q, p, 0.5 * dt)
+        return q, p
+
+    def s2_step_rb(self, dt, sys):
+        """
+        Symmetric 2nd order step for Rigid Body (Lecture 24).
+        Sequence: Kinematic(d/2) -> Dynamic(d) -> Kinematic(d/2)
+        Dynamic(d) is further split: 1(d/2) 2(d/2) 3(d) 2(d/2) 1(d/2)
+        """
         dt_sec = dt * SystemConstants.TU
-        rb_sys.kinematic_step(0.5 * dt_sec)
         
-        rb_sys.dynamic_step_axis(0.5 * dt_sec, 0)
-        rb_sys.dynamic_step_axis(0.5 * dt_sec, 1)
-        rb_sys.dynamic_step_axis(dt_sec, 2)
-        rb_sys.dynamic_step_axis(0.5 * dt_sec, 1)
-        rb_sys.dynamic_step_axis(0.5 * dt_sec, 0)
+        # 1. Half Kinematic (Attitude)
+        sys.kinematic_step(0.5 * dt_sec)
         
-        rb_sys.kinematic_step(0.5 * dt_sec)
+        # 2. Full Dynamic (Momentum) - Split symmetrically
+        sys.dynamic_step_axis(0.5 * dt_sec, 0)
+        sys.dynamic_step_axis(0.5 * dt_sec, 1)
+        sys.dynamic_step_axis(dt_sec, 2)
+        sys.dynamic_step_axis(0.5 * dt_sec, 1)
+        sys.dynamic_step_axis(0.5 * dt_sec, 0)
         
-        return (q, p)
+        # 3. Half Kinematic (Attitude)
+        sys.kinematic_step(0.5 * dt_sec)
 
 # ============================================================================
 # 4. Main
@@ -270,9 +271,11 @@ def main():
     dt_norm = dt_days * 86400.0 / SystemConstants.TU
     total_steps = int((duration_years * 365.25 * 86400.0) / (dt_norm * SystemConstants.TU))
     
-    print(f"HW5 Simulation (Recursive Yoshida-6) | Duration: {duration_years} years")
+    print(f"HW5 Simulation (Lecture 24 Splitting) | Duration: {duration_years} years")
     
     crtbp = CRTBP_Normalized(SystemConstants.mu)
+    
+    # L4 Initial State
     l4_ξ = 0.5 - SystemConstants.mu
     l4_η = np.sqrt(3.0) / 2.0
     q0 = np.array([l4_ξ, l4_η])
@@ -286,11 +289,12 @@ def main():
     L0_inertial = rb.get_angular_momentum_inertial()
     E0_rb = rb.get_energy()
     
+    # Storage
     store_interval = max(1, total_steps // 5000)
     t_hist, traj_ξ, traj_η, dE_crtbp_hist = [], [], [], []
     rb_L_inertial_hist, rb_L_diff_hist, rb_dE_hist = [], [], []
     
-    integrator = RecursiveYoshidaIntegrator()
+    integrator = YoshidaIntegrator()
     
     print("Starting integration...")
     for i in range(total_steps):
@@ -316,65 +320,69 @@ def main():
         if (i+1) % (total_steps // 10) == 0:
             print(f"Progress: {(i+1)/total_steps*100:.0f}%")
 
+    # Plotting
     t_arr = np.array(t_hist)
     dE_arr = np.array(dE_crtbp_hist)
     dL_arr = np.array(rb_L_diff_hist)
     
     print("\nGenerating plots...")
     
+    # 1. CRTBP Trajectory
     plt.figure()
     plt.plot(traj_ξ, traj_η, 'b-', linewidth=0.5)
     plt.plot(l4_ξ, l4_η, 'rx', label='L4')
     plt.axis('equal')
     plt.grid(True, alpha=0.3)
     plt.title('CRTBP Trajectory')
+    plt.xlabel('ξ')
+    plt.ylabel('η')
     plt.legend()
     plt.savefig('hw5_crtbp_traj.png', dpi=150)
     plt.close()
 
+    # 2. CRTBP Energy
     plt.figure()
     plt.semilogy(t_arr, dE_arr, 'r-', linewidth=0.5)
     plt.axhline(1e-12, color='k', linestyle='--')
     plt.grid(True, alpha=0.3)
     plt.title('CRTBP Energy Error')
+    plt.xlabel('Years')
+    plt.ylabel('|dE|')
     plt.savefig('hw5_crtbp_energy.png', dpi=150)
     plt.close()
 
+    # 3. TFRBP L
     L_inertial_arr = np.array(rb_L_inertial_hist)
     plt.figure()
     plt.plot(t_arr, L_inertial_arr)
     plt.grid(True, alpha=0.3)
     plt.title('TFBRP Inertial Angular Momentum')
+    plt.xlabel('Years')
+    plt.ylabel('L')
     plt.savefig('hw5_tfbrp_L.png', dpi=150)
     plt.close()
 
+    # 4. TFBRP Energy
     plt.figure()
     plt.plot(t_arr, rb_dE_hist)
     plt.grid(True, alpha=0.3)
     plt.title('TFBRP Energy Error')
+    plt.xlabel('Years')
+    plt.ylabel('dE')
     plt.savefig('hw5_tfbrp_E.png', dpi=150)
     plt.close()
 
+    # 5. TFBRP dL
     plt.figure()
     plt.plot(t_arr, dL_arr)
     plt.axhline(1e-8, color='k', linestyle='--')
     plt.grid(True, alpha=0.3)
     plt.title('TFBRP dL (Inertial)')
+    plt.xlabel('Years')
+    plt.ylabel('|dL|')
     plt.savefig('hw5_tfbrp_dL.png', dpi=150)
     plt.close()
     
-    # Combined Summary Plot
-    fig = plt.figure(figsize=(15, 12))
-    gs = fig.add_gridspec(3, 2)
-    ax1 = fig.add_subplot(gs[0, 0]); ax1.plot(traj_ξ, traj_η, 'b-'); ax1.set_title('Trajectory')
-    ax2 = fig.add_subplot(gs[0, 1]); ax2.semilogy(t_arr, dE_arr, 'r-'); ax2.set_title('CRTBP Energy')
-    ax3 = fig.add_subplot(gs[1, 0]); ax3.plot(t_arr, L_inertial_arr); ax3.set_title('L (Inertial)')
-    ax4 = fig.add_subplot(gs[1, 1]); ax4.plot(t_arr, rb_dE_hist, 'g-'); ax4.set_title('RB Energy')
-    ax5 = fig.add_subplot(gs[2, :]); ax5.plot(t_arr, dL_arr); ax5.set_title('dL')
-    plt.tight_layout()
-    plt.savefig('hw5_combined.png', dpi=150)
-    plt.close()
-
     print("Done.")
 
 if __name__ == "__main__":
